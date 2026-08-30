@@ -174,6 +174,15 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                         error(app.getString(R.string.error_shizuku_permission))
                     }
                     appendLog(app.getString(R.string.log_shizuku_permission))
+                    if (AppPreferences.adbWifiHelp(app)) {
+                        runCatching {
+                            val port = (40000..49999).random()
+                            ShizukuController.exec(arrayOf("settings", "put", "global", "adb_wifi_enabled", "1")).waitFor()
+                            ShizukuController.exec(arrayOf("setprop", "service.adb.tcp.port", port.toString())).waitFor()
+                            ShizukuController.exec(arrayOf("sh", "-c", "stop adbd; start adbd")).waitFor()
+                            appendLog("[*] ADB over Wi-Fi enabled on port $port (Shizuku -> Start via wireless debugging)")
+                        }
+                    }
                 }
                 setPhase(InstallPhase.Checking, app.getString(R.string.status_checking_github))
                 val profile = if (profileId == null) {
@@ -470,15 +479,8 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
             nativeHelperFile()
         }
 
-    private fun nativeHelperFile(): File {
-        val variant = AppPreferences.ksuVariant(app)
-        val libName = if (variant == KsuVariant.Next) {
-            "libcve43499root_next.so"
-        } else {
-            "libcve43499root.so"
-        }
-        return File(app.applicationInfo.nativeLibraryDir, libName)
-    }
+    private fun nativeHelperFile(): File =
+        File(app.applicationInfo.nativeLibraryDir, "libcve43499root.so")
 
     private fun shizukuEnabled(): Boolean = AppPreferences.shizukuMode(app)
 

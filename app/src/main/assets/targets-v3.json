@@ -18,24 +18,6 @@
         "url": "asset://ksud-f731u-kdp",
         "size": 6756208
       }
-    },
-    {
-      "payloadId": "dm3q-S918NKSS8FZG1-ksunext",
-      "displayName": "Galaxy S23 Ultra SM-S918N | FZG1 | KernelSU Next",
-      "models": [
-        "SM-S918N"
-      ],
-      "kernelVersions": [
-        "5.15.189"
-      ],
-      "exploit": {
-        "url": "asset://cve-2026-43499-app.so",
-        "size": 131072
-      },
-      "kernelsu": {
-        "url": "asset://ksud-next",
-        "size": 3852248
-      }
     }
   ]
 }

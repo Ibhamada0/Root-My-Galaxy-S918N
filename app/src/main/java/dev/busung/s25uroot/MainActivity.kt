@@ -276,12 +276,12 @@ private fun isKernelSuManagerInstalled(context: Context, variant: KsuVariant): B
     context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant)) != null
 
 private fun managerAssetName(variant: KsuVariant): String =
-    if (variant == KsuVariant.Next) "managers/ksunext-manager.apk" else "managers/kernelsu-manager.apk"
+"managers/kernelsu-manager.apk" // regular only
 
 private fun managerCacheFile(context: Context, variant: KsuVariant): java.io.File =
     java.io.File(
         context.cacheDir,
-        if (variant == KsuVariant.Next) "ksunext-manager.apk" else "kernelsu-manager.apk",
+        "kernelsu-manager.apk", // regular only
     )
 
 private fun openKernelSuManager(context: Context, variant: KsuVariant) {
@@ -328,10 +328,10 @@ private fun openKernelSuManager(context: Context, variant: KsuVariant) {
 }
 
 private fun kernelSuManagerPackage(variant: KsuVariant): String =
-    if (variant == KsuVariant.Next) KERNEL_SU_MANAGER_PACKAGE else KERNEL_SU_MANAGER_PACKAGE_REGULAR
+KERNEL_SU_MANAGER_PACKAGE_REGULAR // regular only
 
 private fun kernelSuManagerUrl(variant: KsuVariant): String =
-    if (variant == KsuVariant.Next) KERNEL_SU_MANAGER_URL else KERNEL_SU_MANAGER_URL_REGULAR
+KERNEL_SU_MANAGER_URL_REGULAR // regular only
 
 private fun openShizukuManager(context: Context) {
     val launch = context.packageManager.getLaunchIntentForPackage(SHIZUKU_MANAGER_PACKAGE)
@@ -1516,6 +1516,7 @@ private fun SettingsPage(
     val settingsContext = LocalContext.current
     var autoStartShizuku by remember { mutableStateOf(AppPreferences.autoStartShizuku(settingsContext)) }
     var autoRootOnBoot by remember { mutableStateOf(AppPreferences.autoRootOnBoot(settingsContext)) }
+    var adbWifiHelp by remember { mutableStateOf(AppPreferences.adbWifiHelp(settingsContext)) }
 
     val context = LocalContext.current
     val view = LocalView.current
@@ -1705,12 +1706,12 @@ private fun SettingsPage(
                 title = stringResource(R.string.ksu_variant),
                 description = stringResource(R.string.ksu_variant_description),
                 value = stringResource(
-                    if (ksuVariant == KsuVariant.Next) R.string.ksu_variant_next
+                    R.string.ksu_variant_regular // fixed
                     else R.string.ksu_variant_regular,
                 ),
                 onClick = {
                     clickHaptic(view)
-                    showKsuVariantDialog = true
+                    Unit // engine fixed: KernelSU 3.2.5
                 },
             )
         }
@@ -1768,6 +1769,17 @@ private fun SettingsPage(
                     AppPreferences.setAutoRootOnBoot(settingsContext, it)
                 },
             )
+            SettingsSwitchCard(
+                icon = Icons.Rounded.Refresh,
+                title = stringResource(R.string.settings_adb_wifi_help),
+                description = stringResource(R.string.settings_adb_wifi_help_desc),
+                checked = adbWifiHelp,
+                onCheckedChange = {
+                    adbWifiHelp = it
+                    AppPreferences.setAdbWifiHelp(settingsContext, it)
+                },
+            )
+
 
             Card(
                 modifier = Modifier.fillMaxWidth(),

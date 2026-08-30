@@ -196,4 +196,6 @@
     <string name="settings_install_manager_desc_missing">Not installed - install the bundled manager for the selected engine</string>
     <string name="settings_install_manager_desc_installed">Installed</string>
     <string name="settings_install_manager_action">Install</string>
+    <string name="settings_adb_wifi_help">ADB Wi-Fi helper (offline Shizuku)</string>
+    <string name="settings_adb_wifi_help_desc">After Shizuku is granted once, enables wireless debugging on a random port so Shizuku can be started on-device via wireless debugging - no PC and no trusted Wi-Fi needed.</string>
 </resources>

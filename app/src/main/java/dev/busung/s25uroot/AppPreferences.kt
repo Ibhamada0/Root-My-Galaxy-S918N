@@ -94,7 +94,10 @@ object AppPreferences {
         prefs(context).edit().putBoolean(OPTIMIZE_ON_EXPLOIT, enabled).apply()
     }
 
-    fun ksuVariant(context: Context): KsuVariant =
+    fun ksuVariant(context: Context): KsuVariant = KsuVariant.Regular // KernelSU regular only
+
+    @Deprecated("KernelSU Next removed", level = DeprecationLevel.HIDDEN)
+    fun ksuVariantLegacy(context: Context): KsuVariant =
         KsuVariant.fromStoredValue(prefs(context).getString(KSU_VARIANT, null))
 
     fun setKsuVariant(context: Context, variant: KsuVariant) {
@@ -110,6 +113,15 @@ object AppPreferences {
 
     fun setAutoStartShizuku(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(AUTO_START_SHIZUKU, enabled).apply()
+    }
+
+    private const val ADB_WIFI_HELP = "adb_wifi_help"
+
+    fun adbWifiHelp(context: Context): Boolean =
+        prefs(context).getBoolean(ADB_WIFI_HELP, false)
+
+    fun setAdbWifiHelp(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(ADB_WIFI_HELP, enabled).apply()
     }
 
     fun autoRootOnBoot(context: Context): Boolean =
