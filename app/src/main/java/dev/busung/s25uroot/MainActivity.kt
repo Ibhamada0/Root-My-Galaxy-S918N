@@ -275,25 +275,19 @@ private const val SHIZUKU_MANAGER_URL = "https://github.com/thedjchi/Shizuku/rel
 private fun isKernelSuManagerInstalled(context: Context, variant: KsuVariant): Boolean =
     context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant)) != null
 
-private fun managerAssetName(variant: KsuVariant): String =
-    "managers/kernelsu-manager.apk" // regular is the fixed default
+private fun managerAssetName(variant: KsuVariant): String = "managers/kernelsu-manager.apk"
 
 private fun managerCacheFile(context: Context, variant: KsuVariant): java.io.File =
-    java.io.File(
-        context.cacheDir,
-        "kernelsu-manager.apk", // regular
-    )
+    java.io.File(context.cacheDir, "kernelsu-manager.apk")
 
 private fun openKernelSuManager(context: Context, variant: KsuVariant) {
-    val launch = context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant))
-    if (launch != null) {
-        context.startActivity(launch)
-        return
-    }
-    // Manager missing: install the bundled copy (offline — no browser, no download).
+    val pkg = KERNEL_SU_MANAGER_PACKAGE_REGULAR
+    context.packageManager.getLaunchIntentForPackage(pkg)?.let { context.startActivity(it); return }
+
+    // Always install the bundled APK (fully offline - never opens a browser).
     try {
         val apk = managerCacheFile(context, variant)
-        context.assets.open(managerAssetName(variant)).use { input ->
+        context.assets.open("managers/kernelsu-manager.apk").use { input ->
             apk.outputStream().use { output -> input.copyTo(output) }
         }
         var silentInstalled = false
@@ -307,13 +301,10 @@ private fun openKernelSuManager(context: Context, variant: KsuVariant) {
             silentInstalled = result.contains("Success", ignoreCase = true)
         }
         if (silentInstalled) {
-            context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant))
-                ?.let { context.startActivity(it) }
+            context.packageManager.getLaunchIntentForPackage(pkg)?.let { context.startActivity(it) }
         } else {
             val uri = androidx.core.content.FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                apk,
+                context, "${context.packageName}.fileprovider", apk,
             )
             context.startActivity(
                 Intent(Intent.ACTION_VIEW).apply {
@@ -323,7 +314,19 @@ private fun openKernelSuManager(context: Context, variant: KsuVariant) {
             )
         }
     } catch (error: Throwable) {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(kernelSuManagerUrl(variant))))
+        // No browser fallback: surface the error via the system installer on the bundled APK.
+        val apk = managerCacheFile(context, variant)
+        if (apk.exists()) {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context, "${context.packageName}.fileprovider", apk,
+            )
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
+            )
+        }
     }
 }
 
