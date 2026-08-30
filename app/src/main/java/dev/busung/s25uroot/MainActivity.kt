@@ -839,7 +839,13 @@ private fun InstallStatusCard(installState: InstallUiState, onInstall: () -> Uni
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                         Text(
-                            text = stringResource(R.string.status_ksu_active),
+                            text = stringResource(
+                                if (ksuVariant == KsuVariant.Next) {
+                                    R.string.status_ksu_active
+                                } else {
+                                    R.string.status_ksu_active_regular
+                                },
+                            ),
                             style = MaterialTheme.typography.titleMedium,
                         )
                     }
@@ -856,9 +862,17 @@ private fun InstallStatusCard(installState: InstallUiState, onInstall: () -> Uni
                     text = when (installState.phase) {
                         InstallPhase.Installed -> stringResource(
                             if (managerInstalled) {
-                                R.string.install_tap_open_manager
+                                if (ksuVariant == KsuVariant.Next) {
+                                    R.string.install_tap_open_manager
+                                } else {
+                                    R.string.install_tap_open_manager_regular
+                                }
                             } else {
-                                R.string.install_tap_manager
+                                if (ksuVariant == KsuVariant.Next) {
+                                    R.string.install_tap_manager
+                                } else {
+                                    R.string.install_tap_manager_regular
+                                }
                             },
                         )
                         InstallPhase.Failed -> stringResource(R.string.install_tap_retry)
@@ -2114,7 +2128,13 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                         Icon(painterResource(R.drawable.ic_kernelsu), contentDescription = null)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                stringResource(R.string.kernelsu_card_title),
+                                stringResource(
+                                    if (AppPreferences.ksuVariant(LocalContext.current) == KsuVariant.Next) {
+                                        R.string.kernelsu_card_title
+                                    } else {
+                                        R.string.kernelsu_card_title_regular
+                                    },
+                                ),
                                 style = MaterialTheme.typography.titleSmall,
                             )
                             Text(

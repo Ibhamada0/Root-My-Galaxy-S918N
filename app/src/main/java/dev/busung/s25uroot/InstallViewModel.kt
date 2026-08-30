@@ -77,7 +77,13 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
             if (detectInstalled()) {
                 mutableState.value = InstallUiState(
                     phase = InstallPhase.Installed,
-                    message = app.getString(R.string.status_ksu_active),
+                    message = app.getString(
+                        if (AppPreferences.ksuVariant(app) == KsuVariant.Next) {
+                            R.string.status_ksu_active
+                        } else {
+                            R.string.status_ksu_active_regular
+                        },
+                    ),
                     probeOutput = probe,
                     log = probe,
                 )
@@ -176,7 +182,16 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 setPhase(InstallPhase.LoadingKernelSu, app.getString(R.string.status_ksu_loading))
                 installKernelSu(payloads)
 
-                setPhase(InstallPhase.Installed, app.getString(R.string.status_ksu_active))
+                setPhase(
+                    InstallPhase.Installed,
+                    app.getString(
+                        if (AppPreferences.ksuVariant(app) == KsuVariant.Next) {
+                            R.string.status_ksu_active
+                        } else {
+                            R.string.status_ksu_active_regular
+                        },
+                    ),
+                )
                 appendLog(app.getString(R.string.log_install_complete))
                 finishHistory(InstallRunResult.Succeeded)
             } catch (error: Throwable) {
@@ -349,7 +364,20 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
             appendLog(app.getString(R.string.log_ksu_staged))
         }
 
-        val lateLoad = runHelper("--late-load")
+        val variant = AppPreferences.ksuVariant(app)
+        val lateLoad = if (variant == KsuVariant.Next) {
+            // ksud-next v3.3.0 does not support --ephemeral (only ksud v3.2.5 does),
+            // so drive the staged ksud-next directly:
+            //   ksud-next late-load --package-name com.rifsxd.ksunext
+            val stagedKsud = if (shizukuEnabled()) {
+                "/data/local/tmp/ksud-selected"
+            } else {
+                "/data/local/tmp/ksud-s25u-kdp"
+            }
+            runHelper("-c", "$stagedKsud late-load --package-name com.rifsxd.ksunext 2>&1; echo rc=\$?")
+        } else {
+            runHelper("--late-load")
+        }
         require(lateLoad.code == 0) {
             app.getString(R.string.error_ksu_verify, lateLoad.code, lateLoad.output)
         }
