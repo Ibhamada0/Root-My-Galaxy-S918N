@@ -276,12 +276,12 @@ private fun isKernelSuManagerInstalled(context: Context, variant: KsuVariant): B
     context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant)) != null
 
 private fun managerAssetName(variant: KsuVariant): String =
-    if (variant == KsuVariant.Next) "managers/ksunext-manager.apk" else "managers/kernelsu-manager.apk"
+    "managers/kernelsu-manager.apk" // regular is the fixed default
 
 private fun managerCacheFile(context: Context, variant: KsuVariant): java.io.File =
     java.io.File(
         context.cacheDir,
-        if (variant == KsuVariant.Next) "ksunext-manager.apk" else "kernelsu-manager.apk",
+        "kernelsu-manager.apk", // regular
     )
 
 private fun openKernelSuManager(context: Context, variant: KsuVariant) {
@@ -328,10 +328,10 @@ private fun openKernelSuManager(context: Context, variant: KsuVariant) {
 }
 
 private fun kernelSuManagerPackage(variant: KsuVariant): String =
-    if (variant == KsuVariant.Next) KERNEL_SU_MANAGER_PACKAGE else KERNEL_SU_MANAGER_PACKAGE_REGULAR
+KERNEL_SU_MANAGER_PACKAGE_REGULAR // regular
 
 private fun kernelSuManagerUrl(variant: KsuVariant): String =
-    if (variant == KsuVariant.Next) KERNEL_SU_MANAGER_URL else KERNEL_SU_MANAGER_URL_REGULAR
+KERNEL_SU_MANAGER_URL_REGULAR // regular
 
 private fun openShizukuManager(context: Context) {
     val launch = context.packageManager.getLaunchIntentForPackage(SHIZUKU_MANAGER_PACKAGE)
@@ -1610,7 +1610,7 @@ private fun SettingsPage(
             ThemeModeSelector(themeMode, onThemeModeChanged)
         }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SettingsCard(
                     modifier = Modifier.onGloballyPositioned { coordinates ->
                         colorMenuTop = with(density) { coordinates.positionInWindow().y.toDp() }
@@ -1693,7 +1693,7 @@ private fun SettingsPage(
         }
         item { SectionLabel(stringResource(R.string.about)) }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 UpdateSettingsCard(
                     status = updateStatus,
                     position = SettingsCardPosition.Top,
@@ -1754,7 +1754,7 @@ private fun SettingsPage(
                         )
                         Text(
                             stringResource(
-                                if (isKernelSuManagerInstalled(settingsContext, ksuVariant)) {
+                                if (isKernelSuManagerInstalled(settingsContext, KsuVariant.Regular)) {
                                     R.string.settings_install_manager_desc_installed
                                 } else {
                                     R.string.settings_install_manager_desc_missing
@@ -1765,8 +1765,8 @@ private fun SettingsPage(
                         )
                     }
                     FilledTonalButton(
-                        onClick = { openKernelSuManager(settingsContext, ksuVariant) },
-                        enabled = !isKernelSuManagerInstalled(settingsContext, ksuVariant),
+                        onClick = { openKernelSuManager(settingsContext, KsuVariant.Regular) },
+                        enabled = !isKernelSuManagerInstalled(settingsContext, KsuVariant.Regular),
                     ) {
                         Text(stringResource(R.string.settings_install_manager_action))
                     }
