@@ -84,7 +84,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 return@launch
             }
             try {
-                val profile = repository.resolveTarget(DeviceSnapshot.current())
+                val profile = repository.resolveTarget(DeviceSnapshot.current(), AppPreferences.ksuVariant(app))
                 mutableState.value = InstallUiState(
                     phase = InstallPhase.Ready,
                     message = app.getString(R.string.status_not_installed),
