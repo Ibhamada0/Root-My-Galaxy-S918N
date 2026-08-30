@@ -12,7 +12,7 @@ object StartupOptimizer {
         }
 
         val packageName = context.packageName
-        val keep = setOf(packageName, SHIZUKU_PACKAGE, KSU_MANAGER_PACKAGE)
+        val keep = setOf(packageName, SHIZUKU_PACKAGE) + KSU_MANAGER_PACKAGES
         val results = mutableListOf<String>()
 
         runCommand("cmd", "deviceidle", "whitelist", "+$packageName", results = results)
@@ -43,6 +43,7 @@ object StartupOptimizer {
     private const val SUCCESS = "ok"
     private const val FAILURE = "failed"
     private const val SHIZUKU_PACKAGE = "moe.shizuku.manager"
-    private const val KSU_MANAGER_PACKAGE = "com.rifsxd.ksunext"
+    private val KSU_MANAGER_PACKAGES =
+        setOf("com.rifsxd.ksunext", "me.weishu.kernelsu")
     private val PACKAGE_NAME = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")
 }

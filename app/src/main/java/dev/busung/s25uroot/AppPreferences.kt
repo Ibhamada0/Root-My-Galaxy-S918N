@@ -28,10 +28,21 @@ enum class AppThemeMode(val storedValue: String) {
     }
 }
 
+enum class KsuVariant(val storedValue: String) {
+    Regular("kernelsu"),
+    Next("kernelsu_next");
+
+    companion object {
+        fun fromStoredValue(value: String?): KsuVariant =
+            entries.firstOrNull { it.storedValue == value } ?: Regular
+    }
+}
+
 object AppPreferences {
     private const val PREFERENCES = "appearance"
     private const val ACCENT_COLOR = "accent_color"
     private const val THEME_MODE = "theme_mode"
+    private const val KSU_VARIANT = "ksu_variant"
     private const val ADVANCED_MODE = "advanced_mode"
     private const val SHIZUKU_MODE = "shizuku_mode"
     private const val OPTIMIZE_ON_EXPLOIT = "optimize_on_exploit"
@@ -81,6 +92,13 @@ object AppPreferences {
 
     fun setOptimizeOnExploit(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(OPTIMIZE_ON_EXPLOIT, enabled).apply()
+    }
+
+    fun ksuVariant(context: Context): KsuVariant =
+        KsuVariant.fromStoredValue(prefs(context).getString(KSU_VARIANT, null))
+
+    fun setKsuVariant(context: Context, variant: KsuVariant) {
+        prefs(context).edit().putString(KSU_VARIANT, variant.storedValue).apply()
     }
 
     fun lastRootDurationMillis(context: Context): Long =

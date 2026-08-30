@@ -24,9 +24,16 @@ class PayloadRepository(private val context: Context) {
         return SupportManifest.parse(manifestBytes).targets
     }
 
-    fun resolveTarget(snapshot: DeviceSnapshot): TargetProfile = loadTargets()
-        .firstOrNull { it.matches(snapshot) }
-        ?: error(context.getString(R.string.repo_no_profile))
+    fun resolveTarget(snapshot: DeviceSnapshot, variant: KsuVariant): TargetProfile {
+        val matched = loadTargets().filter { it.matches(snapshot) }
+        val profile = when (variant) {
+            KsuVariant.Next -> matched.firstOrNull { it.profileId.endsWith(KSU_NEXT_SUFFIX) }
+                ?: matched.firstOrNull { !it.profileId.endsWith(KSU_NEXT_SUFFIX) }
+            KsuVariant.Regular -> matched.firstOrNull { !it.profileId.endsWith(KSU_NEXT_SUFFIX) }
+                ?: matched.firstOrNull { it.profileId.endsWith(KSU_NEXT_SUFFIX) }
+        }
+        return profile ?: error(context.getString(R.string.repo_no_profile))
+    }
 
     fun resolveTarget(profileId: String): TargetProfile = loadTargets()
         .firstOrNull { it.profileId == profileId }
@@ -175,6 +182,7 @@ class PayloadRepository(private val context: Context) {
         }
 
     companion object {
+        private const val KSU_NEXT_SUFFIX = "-ksunext"
         private const val ASSET_PREFIX = "asset://"
         private const val COMMIT_API_URL =
             "https://api.github.com/repos/youyoudezhuzhu/rmg-f731u/git/ref/heads/main"

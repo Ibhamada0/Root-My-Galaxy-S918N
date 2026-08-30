@@ -151,11 +151,15 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 }
                 setPhase(InstallPhase.Checking, app.getString(R.string.status_checking_github))
                 val profile = if (profileId == null) {
-                    repository.resolveTarget(DeviceSnapshot.current())
+                    repository.resolveTarget(
+                        DeviceSnapshot.current(),
+                        AppPreferences.ksuVariant(app),
+                    )
                 } else {
                     repository.resolveTarget(profileId)
                 }
                 appendLog(app.getString(R.string.log_profile, profile.profileId))
+                appendLog("[*] KernelSU engine: ${AppPreferences.ksuVariant(app).storedValue}")
                 updateHistoryProfile(profile.profileId)
 
                 setPhase(InstallPhase.Downloading, app.getString(R.string.status_downloading_payload))

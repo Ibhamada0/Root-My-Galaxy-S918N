@@ -141,6 +141,10 @@
     <string name="optimize_on_exploit_description">Use Shizuku to stop user apps and request maximum performance before the exploit</string>
     <string name="shizuku_mode">Use Shizuku</string>
     <string name="shizuku_mode_description">Use Shizuku to run the payload. This can improve reliability.</string>
+    <string name="ksu_variant">KernelSU engine</string>
+    <string name="ksu_variant_description">Choose which kernel root engine is loaded on the next install: KernelSU (3.2.5) or KernelSU Next (3.3.0). Switching re-patches the boot image, so root must be re-requested after the change.</string>
+    <string name="ksu_variant_regular">KernelSU (3.2.5)</string>
+    <string name="ksu_variant_next">KernelSU Next (3.3.0)</string>
     <string name="shizuku_not_running_title">Shizuku is not running</string>
     <string name="shizuku_not_running_body">Start the Shizuku service with adb or root and grant this app permission, then enable this option.</string>
     <string name="action_download_shizuku">Download Shizuku</string>

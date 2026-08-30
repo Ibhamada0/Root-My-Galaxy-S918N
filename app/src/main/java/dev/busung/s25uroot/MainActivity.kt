@@ -167,6 +167,7 @@ class MainActivity : ComponentActivity() {
     private var advancedMode by mutableStateOf(false)
     private var shizukuMode by mutableStateOf(false)
     private var optimizeOnExploit by mutableStateOf(true)
+    private var ksuVariant by mutableStateOf(KsuVariant.Regular)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -178,6 +179,7 @@ class MainActivity : ComponentActivity() {
         advancedMode = AppPreferences.advancedMode(this)
         shizukuMode = AppPreferences.shizukuMode(this)
         optimizeOnExploit = AppPreferences.optimizeOnExploit(this)
+        ksuVariant = AppPreferences.ksuVariant(this)
         setContent {
             RootMyGalaxyTheme(accentColor = accentColor, themeMode = themeMode) {
                 RootApp(
@@ -187,6 +189,7 @@ class MainActivity : ComponentActivity() {
                     advancedMode = advancedMode,
                     shizukuMode = shizukuMode,
                     optimizeOnExploit = optimizeOnExploit,
+                    ksuVariant = ksuVariant,
                     onAccentColorChanged = { color ->
                         AppPreferences.setAccentColor(this, color)
                         accentColor = color
@@ -206,6 +209,10 @@ class MainActivity : ComponentActivity() {
                     onOptimizeOnExploitChanged = { enabled ->
                         AppPreferences.setOptimizeOnExploit(this, enabled)
                         optimizeOnExploit = enabled
+                    },
+                    onKsuVariantChanged = { variant ->
+                        AppPreferences.setKsuVariant(this, variant)
+                        ksuVariant = variant
                     },
                     openInstaller = { profileId ->
                         val installer = Intent(this, InstallActivity::class.java)
@@ -257,20 +264,28 @@ private const val KERNEL_SU_MANAGER_URL =
     "https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v3.3.0/KernelSU_Next_v3.3.0_33214-release.apk"
 private const val KERNEL_SU_MANAGER_PACKAGE = "com.rifsxd.ksunext"
 private const val KERNEL_SU_HOME_URL = "https://github.com/KernelSU-Next/KernelSU-Next"
+private const val KERNEL_SU_MANAGER_PACKAGE_REGULAR = "me.weishu.kernelsu"
+private const val KERNEL_SU_MANAGER_URL_REGULAR = "https://github.com/tiann/KernelSU/releases"
 private const val SHIZUKU_MANAGER_PACKAGE = "moe.shizuku.manager"
 private const val SHIZUKU_MANAGER_URL = "https://github.com/thedjchi/Shizuku/releases/"
 
-private fun isKernelSuManagerInstalled(context: Context): Boolean =
-    context.packageManager.getLaunchIntentForPackage(KERNEL_SU_MANAGER_PACKAGE) != null
+private fun isKernelSuManagerInstalled(context: Context, variant: KsuVariant): Boolean =
+    context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant)) != null
 
-private fun openKernelSuManager(context: Context) {
-    val launch = context.packageManager.getLaunchIntentForPackage(KERNEL_SU_MANAGER_PACKAGE)
+private fun openKernelSuManager(context: Context, variant: KsuVariant) {
+    val launch = context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant))
     if (launch != null) {
         context.startActivity(launch)
     } else {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(KERNEL_SU_MANAGER_URL)))
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(kernelSuManagerUrl(variant))))
     }
 }
+
+private fun kernelSuManagerPackage(variant: KsuVariant): String =
+    if (variant == KsuVariant.Next) KERNEL_SU_MANAGER_PACKAGE else KERNEL_SU_MANAGER_PACKAGE_REGULAR
+
+private fun kernelSuManagerUrl(variant: KsuVariant): String =
+    if (variant == KsuVariant.Next) KERNEL_SU_MANAGER_URL else KERNEL_SU_MANAGER_URL_REGULAR
 
 private fun openShizukuManager(context: Context) {
     val launch = context.packageManager.getLaunchIntentForPackage(SHIZUKU_MANAGER_PACKAGE)
@@ -289,8 +304,10 @@ private fun RootApp(
     advancedMode: Boolean,
     shizukuMode: Boolean,
     optimizeOnExploit: Boolean,
+    ksuVariant: KsuVariant,
     onAccentColorChanged: (AccentColor) -> Unit,
     onThemeModeChanged: (AppThemeMode) -> Unit,
+    onKsuVariantChanged: (KsuVariant) -> Unit,
     onAdvancedModeChanged: (Boolean) -> Unit,
     onShizukuModeChanged: (Boolean) -> Unit,
     onOptimizeOnExploitChanged: (Boolean) -> Unit,
@@ -514,6 +531,7 @@ private fun RootApp(
                     advancedMode = advancedMode,
                     shizukuMode = shizukuMode,
                     optimizeOnExploit = optimizeOnExploit,
+                    ksuVariant = ksuVariant,
                     updateStatus = updateStatus,
                     onCheckForUpdate = checkForUpdate,
                     onStartDownload = startDownload,
@@ -522,6 +540,7 @@ private fun RootApp(
                     onAdvancedModeChanged = onAdvancedModeChanged,
                     onShizukuModeChanged = onShizukuModeChanged,
                     onOptimizeOnExploitChanged = onOptimizeOnExploitChanged,
+                    onKsuVariantChanged = onKsuVariantChanged,
                 )
             }
         }
@@ -766,14 +785,14 @@ private fun InstallStatusCard(installState: InstallUiState, onInstall: () -> Uni
     val context = LocalContext.current
     val view = LocalView.current
     val interactionSource = remember { MutableInteractionSource() }
-    val managerInstalled = remember(installState) { isKernelSuManagerInstalled(context) }
+    val managerInstalled = remember(installState, ksuVariant) { isKernelSuManagerInstalled(context, ksuVariant) }
     Card(
         onClick = {
             clickHaptic(view)
             when {
                 installState.busy -> Unit
                 installState.phase == InstallPhase.Installed -> {
-                    openKernelSuManager(context)
+                    openKernelSuManager(context, ksuVariant)
                 }
                 else -> onInstall()
             }
@@ -1414,6 +1433,7 @@ private fun SettingsPage(
     advancedMode: Boolean,
     shizukuMode: Boolean,
     optimizeOnExploit: Boolean,
+    ksuVariant: KsuVariant,
     updateStatus: UpdateStatus,
     onCheckForUpdate: () -> Unit,
     onStartDownload: (UpdateInfo) -> Unit,
@@ -1422,6 +1442,7 @@ private fun SettingsPage(
     onAdvancedModeChanged: (Boolean) -> Unit,
     onShizukuModeChanged: (Boolean) -> Unit,
     onOptimizeOnExploitChanged: (Boolean) -> Unit,
+    onKsuVariantChanged: (KsuVariant) -> Unit,
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -1430,8 +1451,10 @@ private fun SettingsPage(
     var showColorDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showShizukuMissingDialog by remember { mutableStateOf(false) }
+    var showKsuVariantDialog by remember { mutableStateOf(false) }
     var languageMenuTop by remember { mutableStateOf(32.dp) }
     var colorMenuTop by remember { mutableStateOf(32.dp) }
+    var ksuVariantMenuTop by remember { mutableStateOf(32.dp) }
     val density = LocalDensity.current
     val currentLanguageTag = AppPreferences.languageTag(context)
 
@@ -1489,6 +1512,22 @@ private fun SettingsPage(
                 onAccentColorChanged(colors[index])
             },
             onDismiss = { showColorDialog = false },
+        )
+    }
+
+    if (showKsuVariantDialog) {
+        SideChoiceMenu(
+            choices = listOf(
+                context.getString(R.string.ksu_variant_regular),
+                context.getString(R.string.ksu_variant_next),
+            ),
+            selectedIndex = if (ksuVariant == KsuVariant.Next) 1 else 0,
+            topOffset = ksuVariantMenuTop,
+            onSelected = { index ->
+                showKsuVariantDialog = false
+                onKsuVariantChanged(if (index == 1) KsuVariant.Next else KsuVariant.Regular)
+            },
+            onDismiss = { showKsuVariantDialog = false },
         )
     }
 
@@ -1581,6 +1620,24 @@ private fun SettingsPage(
                 onCheckedChange = {
                     clickHaptic(view)
                     onAdvancedModeChanged(it)
+                },
+            )
+        }
+        item {
+            SettingsCard(
+                modifier = Modifier.onGloballyPositioned { coordinates ->
+                    ksuVariantMenuTop = with(density) { coordinates.positionInWindow().y.toDp() }
+                },
+                icon = Icons.Rounded.Security,
+                title = stringResource(R.string.ksu_variant),
+                description = stringResource(R.string.ksu_variant_description),
+                value = stringResource(
+                    if (ksuVariant == KsuVariant.Next) R.string.ksu_variant_next
+                    else R.string.ksu_variant_regular,
+                ),
+                onClick = {
+                    clickHaptic(view)
+                    showKsuVariantDialog = true
                 },
             )
         }
