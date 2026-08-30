@@ -784,6 +784,7 @@ private fun HowItWorksCard() {
 private fun InstallStatusCard(installState: InstallUiState, onInstall: () -> Unit) {
     val context = LocalContext.current
     val view = LocalView.current
+    val ksuVariant = AppPreferences.ksuVariant(context)
     val interactionSource = remember { MutableInteractionSource() }
     val managerInstalled = remember(installState, ksuVariant) { isKernelSuManagerInstalled(context, ksuVariant) }
     Card(
