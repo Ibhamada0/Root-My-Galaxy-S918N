@@ -276,12 +276,12 @@ private fun isKernelSuManagerInstalled(context: Context, variant: KsuVariant): B
     context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant)) != null
 
 private fun managerAssetName(variant: KsuVariant): String =
-"managers/kernelsu-manager.apk" // regular only
+    if (variant == KsuVariant.Next) "managers/ksunext-manager.apk" else "managers/kernelsu-manager.apk"
 
 private fun managerCacheFile(context: Context, variant: KsuVariant): java.io.File =
     java.io.File(
         context.cacheDir,
-        "kernelsu-manager.apk", // regular only
+        if (variant == KsuVariant.Next) "ksunext-manager.apk" else "kernelsu-manager.apk",
     )
 
 private fun openKernelSuManager(context: Context, variant: KsuVariant) {
@@ -328,10 +328,10 @@ private fun openKernelSuManager(context: Context, variant: KsuVariant) {
 }
 
 private fun kernelSuManagerPackage(variant: KsuVariant): String =
-KERNEL_SU_MANAGER_PACKAGE_REGULAR // regular only
+    if (variant == KsuVariant.Next) KERNEL_SU_MANAGER_PACKAGE else KERNEL_SU_MANAGER_PACKAGE_REGULAR
 
 private fun kernelSuManagerUrl(variant: KsuVariant): String =
-KERNEL_SU_MANAGER_URL_REGULAR // regular only
+    if (variant == KsuVariant.Next) KERNEL_SU_MANAGER_URL else KERNEL_SU_MANAGER_URL_REGULAR
 
 private fun openShizukuManager(context: Context) {
     val launch = context.packageManager.getLaunchIntentForPackage(SHIZUKU_MANAGER_PACKAGE)
@@ -1516,7 +1516,6 @@ private fun SettingsPage(
     val settingsContext = LocalContext.current
     var autoStartShizuku by remember { mutableStateOf(AppPreferences.autoStartShizuku(settingsContext)) }
     var autoRootOnBoot by remember { mutableStateOf(AppPreferences.autoRootOnBoot(settingsContext)) }
-    var adbWifiHelp by remember { mutableStateOf(AppPreferences.adbWifiHelp(settingsContext)) }
 
     val context = LocalContext.current
     val view = LocalView.current
@@ -1525,10 +1524,8 @@ private fun SettingsPage(
     var showColorDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showShizukuMissingDialog by remember { mutableStateOf(false) }
-    var showKsuVariantDialog by remember { mutableStateOf(false) }
     var languageMenuTop by remember { mutableStateOf(32.dp) }
     var colorMenuTop by remember { mutableStateOf(32.dp) }
-    var ksuVariantMenuTop by remember { mutableStateOf(32.dp) }
     val density = LocalDensity.current
     val currentLanguageTag = AppPreferences.languageTag(context)
 
@@ -1589,21 +1586,6 @@ private fun SettingsPage(
         )
     }
 
-    if (showKsuVariantDialog) {
-        SideChoiceMenu(
-            choices = listOf(
-                context.getString(R.string.ksu_variant_regular),
-                context.getString(R.string.ksu_variant_next),
-            ),
-            selectedIndex = if (ksuVariant == KsuVariant.Next) 1 else 0,
-            topOffset = ksuVariantMenuTop,
-            onSelected = { index ->
-                showKsuVariantDialog = false
-                onKsuVariantChanged(if (index == 1) KsuVariant.Next else KsuVariant.Regular)
-            },
-            onDismiss = { showKsuVariantDialog = false },
-        )
-    }
 
     if (showAboutDialog) {
         AboutDialog(onDismiss = { showAboutDialog = false })
@@ -1698,24 +1680,6 @@ private fun SettingsPage(
             )
         }
         item {
-            SettingsCard(
-                modifier = Modifier.onGloballyPositioned { coordinates ->
-                    ksuVariantMenuTop = with(density) { coordinates.positionInWindow().y.toDp() }
-                },
-                icon = Icons.Rounded.Security,
-                title = stringResource(R.string.ksu_variant),
-                description = stringResource(R.string.ksu_variant_description),
-                value = stringResource(
-                    R.string.ksu_variant_regular // fixed
-                    else R.string.ksu_variant_regular,
-                ),
-                onClick = {
-                    clickHaptic(view)
-                    Unit // engine fixed: KernelSU 3.2.5
-                },
-            )
-        }
-        item {
             SettingsSwitchCard(
                 icon = Icons.Rounded.Memory,
                 title = stringResource(R.string.optimize_on_exploit),
@@ -1769,17 +1733,6 @@ private fun SettingsPage(
                     AppPreferences.setAutoRootOnBoot(settingsContext, it)
                 },
             )
-            SettingsSwitchCard(
-                icon = Icons.Rounded.Refresh,
-                title = stringResource(R.string.settings_adb_wifi_help),
-                description = stringResource(R.string.settings_adb_wifi_help_desc),
-                checked = adbWifiHelp,
-                onCheckedChange = {
-                    adbWifiHelp = it
-                    AppPreferences.setAdbWifiHelp(settingsContext, it)
-                },
-            )
-
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
