@@ -272,11 +272,54 @@ private const val SHIZUKU_MANAGER_URL = "https://github.com/thedjchi/Shizuku/rel
 private fun isKernelSuManagerInstalled(context: Context, variant: KsuVariant): Boolean =
     context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant)) != null
 
+private fun managerAssetName(variant: KsuVariant): String =
+    if (variant == KsuVariant.Next) "managers/ksunext-manager.apk" else "managers/kernelsu-manager.apk"
+
+private fun managerCacheFile(context: Context, variant: KsuVariant): java.io.File =
+    java.io.File(
+        context.cacheDir,
+        if (variant == KsuVariant.Next) "ksunext-manager.apk" else "kernelsu-manager.apk",
+    )
+
 private fun openKernelSuManager(context: Context, variant: KsuVariant) {
     val launch = context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant))
     if (launch != null) {
         context.startActivity(launch)
-    } else {
+        return
+    }
+    // Manager missing: install the bundled copy (offline — no browser, no download).
+    try {
+        val apk = managerCacheFile(context, variant)
+        context.assets.open(managerAssetName(variant)).use { input ->
+            apk.outputStream().use { output -> input.copyTo(output) }
+        }
+        var silentInstalled = false
+        if (ShizukuController.isRunning() && ShizukuController.isGranted()) {
+            val remotePath = "/data/local/tmp/ksu-manager-install.apk"
+            ShizukuController.exec(arrayOf("rm", "-f", remotePath)).waitFor()
+            ShizukuController.writeFile(remotePath, "644", apk.inputStream())
+            val result = ShizukuController.capture(
+                arrayOf("sh", "-c", "pm install -r '$remotePath'; rm -f '$remotePath'"),
+            )
+            silentInstalled = result.contains("Success", ignoreCase = true)
+        }
+        if (silentInstalled) {
+            context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant))
+                ?.let { context.startActivity(it) }
+        } else {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                apk,
+            )
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
+            )
+        }
+    } catch (error: Throwable) {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(kernelSuManagerUrl(variant))))
     }
 }
