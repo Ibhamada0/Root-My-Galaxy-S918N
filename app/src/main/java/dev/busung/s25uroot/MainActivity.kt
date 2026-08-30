@@ -78,6 +78,8 @@ import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
@@ -1746,6 +1748,7 @@ private fun SettingsPage(
             }
 
             SettingsSwitchCard(
+                icon = Icons.Rounded.PlayArrow,
                 title = stringResource(R.string.settings_auto_start_shizuku),
                 description = stringResource(R.string.settings_auto_start_shizuku_desc),
                 checked = autoStartShizuku,
@@ -1755,6 +1758,7 @@ private fun SettingsPage(
                 },
             )
             SettingsSwitchCard(
+                icon = Icons.Rounded.Refresh,
                 title = stringResource(R.string.settings_auto_root_boot),
                 description = stringResource(R.string.settings_auto_root_boot_desc),
                 checked = autoRootOnBoot,
