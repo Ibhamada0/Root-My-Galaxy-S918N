@@ -188,4 +188,8 @@
         <item quantity="one">This run and its log will be permanently removed.</item>
         <item quantity="other">These runs and their logs will be permanently removed.</item>
     </plurals>
+    <string name="settings_auto_start_shizuku">Auto-start Shizuku</string>
+    <string name="settings_auto_start_shizuku_desc">When you tap Install, if Shizuku is not running the app opens it and waits, then continues automatically.</string>
+    <string name="settings_auto_root_boot">Root after every boot</string>
+    <string name="settings_auto_root_boot_desc">Automatically re-runs the rooting process after each restart (root is temporary and is lost on reboot).</string>
 </resources>

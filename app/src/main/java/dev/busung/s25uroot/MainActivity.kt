@@ -365,6 +365,14 @@ private fun RootApp(
     var selectedProfile by remember { mutableStateOf<TargetProfile?>(null) }
     var compatibilityWarning by remember { mutableStateOf<CompatibilityWarning?>(null) }
     val device = remember { DeviceSnapshot.current() }
+    val autoRootContext = LocalContext.current
+    LaunchedEffect(Unit) {
+        if (AppPreferences.autoRootOnBoot(autoRootContext) &&
+            AppPreferences.consumeAutoRootPending(autoRootContext)
+        ) {
+            installViewModel.install(null)
+        }
+    }
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -1502,6 +1510,10 @@ private fun SettingsPage(
     onOptimizeOnExploitChanged: (Boolean) -> Unit,
     onKsuVariantChanged: (KsuVariant) -> Unit,
 ) {
+    val settingsContext = LocalContext.current
+    var autoStartShizuku by remember { mutableStateOf(AppPreferences.autoStartShizuku(settingsContext)) }
+    var autoRootOnBoot by remember { mutableStateOf(AppPreferences.autoRootOnBoot(settingsContext)) }
+
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -1732,6 +1744,25 @@ private fun SettingsPage(
                     },
                 )
             }
+
+            SettingsSwitchCard(
+                title = stringResource(R.string.settings_auto_start_shizuku),
+                description = stringResource(R.string.settings_auto_start_shizuku_desc),
+                checked = autoStartShizuku,
+                onCheckedChange = {
+                    autoStartShizuku = it
+                    AppPreferences.setAutoStartShizuku(settingsContext, it)
+                },
+            )
+            SettingsSwitchCard(
+                title = stringResource(R.string.settings_auto_root_boot),
+                description = stringResource(R.string.settings_auto_root_boot_desc),
+                checked = autoRootOnBoot,
+                onCheckedChange = {
+                    autoRootOnBoot = it
+                    AppPreferences.setAutoRootOnBoot(settingsContext, it)
+                },
+            )
         }
     }
 }

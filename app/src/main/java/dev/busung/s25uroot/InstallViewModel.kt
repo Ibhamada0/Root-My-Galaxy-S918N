@@ -1,6 +1,7 @@
 package dev.busung.s25uroot
 
 import android.app.Application
+import android.content.Intent
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -147,6 +148,25 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
             try {
                 if (shizukuEnabled()) {
                     appendLog(app.getString(R.string.log_shizuku_prepare))
+                    if (!ShizukuController.isRunning() && AppPreferences.autoStartShizuku(app)) {
+                        // Try to wake Shizuku: root shell (if a previous root session left su),
+                        // then open the Shizuku UI so the user can tap Start once.
+                        appendLog("[*] Shizuku not running - attempting auto-start")
+                        runCatching {
+                            Runtime.getRuntime().exec(
+                                arrayOf("su", "-c", "sh /storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh"),
+                            ).waitFor()
+                        }
+                        if (!ShizukuController.isRunning()) {
+                            runCatching {
+                                app.packageManager.getLaunchIntentForPackage("moe.shizuku.manager")
+                                    ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    ?.let { app.startActivity(it) }
+                            }
+                        }
+                        appendLog("[*] Waiting for Shizuku service (up to 60s)...")
+                        ShizukuController.pingUntilRunning(60_000)
+                    }
                     if (!ShizukuController.isRunning() && !ShizukuController.pingUntilRunning()) {
                         error(app.getString(R.string.error_shizuku_unavailable))
                     }

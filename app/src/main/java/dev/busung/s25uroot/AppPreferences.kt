@@ -101,6 +101,34 @@ object AppPreferences {
         prefs(context).edit().putString(KSU_VARIANT, variant.storedValue).apply()
     }
 
+    private const val AUTO_START_SHIZUKU = "auto_start_shizuku"
+    private const val AUTO_ROOT_ON_BOOT = "auto_root_on_boot"
+    private const val AUTO_ROOT_PENDING = "auto_root_pending"
+
+    fun autoStartShizuku(context: Context): Boolean =
+        prefs(context).getBoolean(AUTO_START_SHIZUKU, false)
+
+    fun setAutoStartShizuku(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(AUTO_START_SHIZUKU, enabled).apply()
+    }
+
+    fun autoRootOnBoot(context: Context): Boolean =
+        prefs(context).getBoolean(AUTO_ROOT_ON_BOOT, false)
+
+    fun setAutoRootOnBoot(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(AUTO_ROOT_ON_BOOT, enabled).apply()
+    }
+
+    fun markAutoRootPending(context: Context) {
+        prefs(context).edit().putBoolean(AUTO_ROOT_PENDING, true).apply()
+    }
+
+    fun consumeAutoRootPending(context: Context): Boolean {
+        val pending = prefs(context).getBoolean(AUTO_ROOT_PENDING, false)
+        if (pending) prefs(context).edit().putBoolean(AUTO_ROOT_PENDING, false).apply()
+        return pending
+    }
+
     fun lastRootDurationMillis(context: Context): Long =
         prefs(context).getLong(LAST_ROOT_DURATION_MILLIS, DEFAULT_ROOT_DURATION_MILLIS)
             .coerceAtLeast(MIN_ROOT_DURATION_MILLIS)
