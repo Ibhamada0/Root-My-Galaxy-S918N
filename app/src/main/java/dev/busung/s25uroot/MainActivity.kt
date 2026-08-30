@@ -80,6 +80,7 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
@@ -1767,6 +1768,45 @@ private fun SettingsPage(
                     AppPreferences.setAutoRootOnBoot(settingsContext, it)
                 },
             )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(Icons.Rounded.Download, contentDescription = null)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.settings_install_manager_title),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            stringResource(
+                                if (isKernelSuManagerInstalled(settingsContext, ksuVariant)) {
+                                    R.string.settings_install_manager_desc_installed
+                                } else {
+                                    R.string.settings_install_manager_desc_missing
+                                },
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = { openKernelSuManager(settingsContext, ksuVariant) },
+                        enabled = !isKernelSuManagerInstalled(settingsContext, ksuVariant),
+                    ) {
+                        Text(stringResource(R.string.settings_install_manager_action))
+                    }
+                }
+            }
         }
     }
 }

@@ -192,4 +192,8 @@
     <string name="settings_auto_start_shizuku_desc">When you tap Install, if Shizuku is not running the app opens it and waits, then continues automatically.</string>
     <string name="settings_auto_root_boot">Root after every boot</string>
     <string name="settings_auto_root_boot_desc">Automatically re-runs the rooting process after each restart (root is temporary and is lost on reboot).</string>
+    <string name="settings_install_manager_title">Manager</string>
+    <string name="settings_install_manager_desc_missing">Not installed - install the bundled manager for the selected engine</string>
+    <string name="settings_install_manager_desc_installed">Installed</string>
+    <string name="settings_install_manager_action">Install</string>
 </resources>
