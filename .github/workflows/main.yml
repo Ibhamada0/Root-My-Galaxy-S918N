@@ -1,0 +1,60 @@
+name: Build Debug APK
+
+# يبني نسخة الـ debug فقط من تطبيق Root My Galaxy ثم يرفعها كـ
+# artifact واحد. تم حذف جميع خطوات الـ release (signing, apksigner,
+# GitHub Release) لتجنّب الفشل اللي حصل في الـ run السابق
+# (build/release apk = fail). الـ debug وحده يكفي للتجربة على الجهاز.
+# تم تعديل تركيب الـ on: لتفادي الـ error:
+#   Unexpected value 'tags' (Line 13, Col: 3)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | "$ANDROID_SDK_ROOT"/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
+
+      - name: Preinstall NDK / CMake (best-effort)
+        run: |
+          "$ANDROID_SDK_ROOT"/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "cmake;3.22.1" >/dev/null 2>&1 || echo "sdkmanager install skipped; relying on AGP auto-download"
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RootMyGalaxy-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
