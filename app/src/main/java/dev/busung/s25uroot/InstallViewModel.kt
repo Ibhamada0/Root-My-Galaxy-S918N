@@ -356,28 +356,21 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         } else {
             val source = shellQuote(payloads.kernelSu.absolutePath)
             val stageCommand =
-                "/system/bin/cp $source /data/local/tmp/ksud-s25u-kdp && " +
+                "/system/bin/cp $source /data/local/tmp/ksud-selected && " +
+                    "/system/bin/cp $source /data/local/tmp/ksud-s25u-kdp && " +
                     "/system/bin/cp $source /data/local/tmp/.ksud-stage && " +
-                    "/system/bin/chmod 755 /data/local/tmp/ksud-s25u-kdp /data/local/tmp/.ksud-stage"
+                    "/system/bin/chmod 755 /data/local/tmp/ksud-selected /data/local/tmp/ksud-s25u-kdp /data/local/tmp/.ksud-stage"
             val stage = runHelper("-c", stageCommand)
             require(stage.code == 0) { app.getString(R.string.error_ksu_stage, stage.output) }
             appendLog(app.getString(R.string.log_ksu_staged))
         }
 
-        val variant = AppPreferences.ksuVariant(app)
-        val lateLoad = if (variant == KsuVariant.Next) {
-            // ksud-next v3.3.0 does not support --ephemeral (only ksud v3.2.5 does),
-            // so drive the staged ksud-next directly:
-            //   ksud-next late-load --package-name com.rifsxd.ksunext
-            val stagedKsud = if (shizukuEnabled()) {
-                "/data/local/tmp/ksud-selected"
-            } else {
-                "/data/local/tmp/ksud-s25u-kdp"
-            }
-            runHelper("-c", "$stagedKsud late-load --package-name com.rifsxd.ksunext 2>&1; echo rc=\$?")
-        } else {
-            runHelper("--late-load")
-        }
+        // v0.3.2: use the variant-matched helper exactly like the original developer:
+        //   Regular -> libcve43499root.so      (drives ksud-f731u-kdp, --ephemeral supported)
+        //   Next    -> libcve43499root_next.so (drives `logcat late-load --kmi
+        //              android13-5.15 --package-name com.rifsxd.ksunext`, no --ephemeral)
+        // The helper reads the staged ksud from /data/local/tmp/ksud-selected.
+        val lateLoad = runHelper("--late-load")
         require(lateLoad.code == 0) {
             app.getString(R.string.error_ksu_verify, lateLoad.code, lateLoad.output)
         }
@@ -457,7 +450,15 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
             nativeHelperFile()
         }
 
-    private fun nativeHelperFile() = File(app.applicationInfo.nativeLibraryDir, "libcve43499root.so")
+    private fun nativeHelperFile(): File {
+        val variant = AppPreferences.ksuVariant(app)
+        val libName = if (variant == KsuVariant.Next) {
+            "libcve43499root_next.so"
+        } else {
+            "libcve43499root.so"
+        }
+        return File(app.applicationInfo.nativeLibraryDir, libName)
+    }
 
     private fun shizukuEnabled(): Boolean = AppPreferences.shizukuMode(app)
 
