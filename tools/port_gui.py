@@ -773,9 +773,10 @@ def main_boot_analyzer(args, log=None):
     if not text_base:
         raise SystemExit("[!] cannot determine KIMAGE_TEXT_BASE — pass --text-base "
                          "0xffffffc008000000 (kallsyms `_text`) or a kallsyms file")
+    res["text_base"] = text_base
     for k in syms:
         a = syms[k]["addr"]
-        syms[k]["off"] = a - text_base if a > text_base else a
+        syms[k]["off"] = a - text_base if a >= text_base else a
     _dump_offsets_table(res, syms, log=log)
     header = build_offsets_header(res, syms, params, log=log)
     out = args.out_offsets or ("device_offsets_%s.h" % (params["model"] or "DEVICE"))
@@ -842,9 +843,10 @@ def _boot_gui_window(parent):
             elif not tb and syms.get("_text"):
                 tb = syms["_text"]["addr"]
                 log("[*] KIMAGE_TEXT_BASE من kallsyms _text: 0x%x" % tb)
+            res["text_base"] = tb
             for k in syms:
                 a = syms[k]["addr"]
-                syms[k]["off"] = a - tb if (tb and a > tb) else a
+                syms[k]["off"] = a - tb if (tb and a >= tb) else a
             _dump_offsets_table(res, syms, log=log)
             header = build_offsets_header(res, syms, params, log=log)
             out = v["out"].get().strip() or ("device_offsets_%s.h" % params["model"])
