@@ -61,8 +61,8 @@ BIN_EXT = {
 }
 SKIP_DIRS = {".git", ".gradle", "build", "node_modules", ".idea", "diagnostics", "__pycache__"}
 
-RE_MODEL = re.compile(r"SM-[A-Z]\d{4}[A-Z0-9]*")
-RE_BUILD = re.compile(r"\b[A-Z]\d{3}[A-Z][A-Z]{3}\d[A-Z]\d\b")
+RE_MODEL = re.compile(r"SM-[A-Z]\d{3}[A-Z0-9]*")
+RE_BUILD = re.compile(r"(?<![A-Z0-9])([A-Z]\d{3}[A-Z])([A-Z]{2,4}[A-Z0-9][A-Z]{3}\d)(?![A-Z0-9])")
 RE_PAYLOAD = re.compile(r"([a-z0-9]{4,6})-([A-Z]\d{3}[A-Z])([A-Z]{3}\d[A-Z]\d)?")
 RE_KMI = re.compile(r"android\d+\s*-\s*\d+\.\d+")
 RE_REVIEW = re.compile(r"(target|p0_fingerprint|offset|kallsyms|payload_guard|banner)", re.I)
