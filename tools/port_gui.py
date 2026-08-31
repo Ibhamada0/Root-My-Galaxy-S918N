@@ -28,6 +28,12 @@ Usage
   python port_gui.py --cli --source SRC --out OUT --codename dm5q \
       --model SM-S928B --firmware S928BXXS1AXK1 --kmi android13-5.15 \
       [--android 15 --oneui 7.1 --partitions boot,vbmeta]             # CLI
+
+  python port_gui.py --auto --source SRC --device-files FOLDER [--out OUT] [--skip-build]
+      # FULLY AUTOMATIC: scans FOLDER for boot.img/.lz4 + kernel + kallsyms.txt,
+      # derives model/codename/firmware from file names, analyzes the boot image,
+      # derives all kernel offsets, patches target.h/p0_fingerprint.h, and builds
+      # the APK. Zero manual input.
 """
 from __future__ import annotations
 
@@ -384,6 +390,14 @@ def build_parser():
     p.add_argument("--kallsyms", help="kallsyms.txt from the device (recommended)")
     p.add_argument("--text-base", help="override KIMAGE_TEXT_BASE (hex, e.g. 0xffffffc008000000)")
     p.add_argument("--out-offsets", help="output path for the generated device_offsets_<MODEL>.h")
+    p.add_argument("--auto", dest="auto", action="store_true",
+                   help="FULLY AUTOMATIC pipeline: detect device files -> derive offsets -> "
+                        "port -> patch headers -> build APK (zero manual input)")
+    p.add_argument("--device-files",
+                   help="folder containing the new device's boot.img / boot.img.lz4 / kernel / "
+                        "kallsyms.txt (default: current directory)")
+    p.add_argument("--skip-build", action="store_true",
+                   help="auto mode: skip the gradle APK build step")
     return p
 
 
@@ -862,6 +876,194 @@ def _boot_gui_window(parent):
 
 
 # --------------------------------------------------------------------------
+# AUTOMATIC end-to-end pipeline (--auto) — zero manual input
+# --------------------------------------------------------------------------
+
+CODENAME_MAP = {
+    "908": "dm2q", "916": "dm1q", "918": "dm3q", "926": "dm2q",
+    "928": "dm5q", "936": "dm3q", "986": "dm3q", "711": "dm4q",
+}
+OFFSET_DEFINES = [
+    ("INIT_TASK_OFF", "init_task"),
+    ("COMMIT_CREDS_OFF", "commit_creds"),
+    ("PREPARE_KERNEL_CRED_OFF", "prepare_kernel_cred"),
+    ("OVERRIDE_CREDS_OFF", "override_creds"),
+    ("OVERIDE_CREDS_OFF", "override_creds"),
+    ("REVERT_CREDS_OFF", "revert_creds"),
+    ("SELINUX_ENFORCING_OFF", "selinux_enforcing"),
+    ("SELINUX_ENFORCING_BOOT_OFF", "selinux_enforcing_boot"),
+    ("KMALLOC_CACHES_OFF", "kmalloc_caches"),
+    ("ASHMEM_FOPS_OFF", "ashmem_fops"),
+    ("ANON_PIPE_BUF_OPS_OFF", "anon_pipe_buf_ops"),
+    ("SYSTEM_UNBOUND_WQ_OFF", "system_unbound_wq"),
+    ("CALL_USERMODEHELPER_EXEC_WORK_OFF", "call_usermodehelper_exec_work"),
+    ("RUN_CMD_OFF", "run_cmd"),
+    ("USERMODEHELPER_READ_TRYLOCK_OFF", "usermodehelper_read_trylock"),
+    ("INIT_CRED_OFF", "init_cred"),
+    ("CRED_JAR_OFF", "cred_jar"),
+    ("SWAPPER_PG_DIR_OFF", "swapper_pg_dir"),
+]
+
+
+def detect_device_from_folder(folder, log=None):
+    """Scan a folder of firmware/device files for model/codename/build and the
+    paths of boot.img(.lz4), kernel and kallsyms.txt. Zero input needed."""
+    log = log or (lambda s: None)
+    names, paths = [], {}
+    for dp, dn, fns in os.walk(folder):
+        dn[:] = [d for d in dn if d not in SKIP_DIRS]
+        for fn in fns:
+            names.append(fn)
+            low = fn.lower()
+            fp = os.path.join(dp, fn)
+            if low == "boot.img" or low.startswith("boot.img.") or low.startswith("boot-"):
+                paths.setdefault("boot", fp)
+            elif low == "kernel" or low.startswith("kernel."):
+                paths.setdefault("kernel", fp)
+            elif low == "kallsyms.txt":
+                paths.setdefault("kallsyms", fp)
+    joined = " ".join(names)
+    det = {"build": "", "model": "", "codename": "", "kmi": ""}
+    m = RE_BUILD.search(joined)
+    if m:
+        det["build"] = m.group(0)
+    m = RE_MODEL.search(joined)
+    if m:
+        det["model"] = m.group(0)
+    if not det["model"] and det["build"] and len(det["build"]) >= 5:
+        # S918NKSS8FZG1 -> SM-S918N
+        det["model"] = "SM-S" + det["build"][1:5]
+    stub = det["model"][4:7] if det["model"].startswith("SM-S") else ""
+    if stub in CODENAME_MAP:
+        det["codename"] = CODENAME_MAP[stub]
+    elif det["build"]:
+        det["codename"] = ("dm-" + det["build"][1:5]).lower()
+    log("[auto] scanned %d file(s): build=%r model=%r codename=%r"
+        % (len(names), det["build"], det["model"], det["codename"]))
+    log("[auto] device files found: %s" % json.dumps(paths, ensure_ascii=False))
+    return det, paths
+
+
+def auto_patch_offsets(out_root, res, syms, log=None):
+    """Rewrite every `#define <OFFSET> 0x…` we derived, inside every target.h /
+    p0_fingerprint.h / offsets header in the ported tree. Returns patched count."""
+    log = log or (lambda s: None)
+    tb = res.get("text_base") or 0
+    phys = res.get("phys_load") or 0
+    values = {}
+    for define, sym in OFFSET_DEFINES:
+        if sym in syms:
+            values[define] = syms[sym]["off"]
+    if tb:
+        values["KIMAGE_TEXT_BASE"] = tb
+    if phys:
+        values["P0_KERNEL_PHYS_LOAD"] = phys
+        values["P0_KERNEL_PHYS_LOAD_M"] = phys & ~(0x200000 - 1)
+    if not values:
+        log("[auto] no kallsyms-derived offsets available — headers left untouched")
+        return 0
+    patched = 0
+    for dp, _, fns in os.walk(out_root):
+        if any(x in dp.split(os.sep) for x in SKIP_DIRS):
+            continue
+        for fn in fns:
+            if os.path.splitext(fn)[1].lower() not in TEXT_EXT:
+                continue
+            fp = os.path.join(dp, fn)
+            text = read_text(fp)
+            if not any(("#define " + k) in text for k in values):
+                continue
+            changed = False
+            for define, val in values.items():
+                pat = re.compile(r"(#define\s+%s\s+)0x[0-9a-fA-F]+" % re.escape(define))
+                if pat.search(text):
+                    text = pat.sub(lambda m: m.group(1) + ("0x%08x" % val), text)
+                    changed = True
+            if changed:
+                write_text(fp, text)
+                patched += 1
+                log("[auto] patched %s" % os.path.relpath(fp, out_root))
+    return patched
+
+
+def main_auto(args, log=None):
+    """Full end-to-end port: detect -> analyze -> port -> patch -> build."""
+    log = log or print
+    source = os.path.abspath(args.source or os.path.dirname(os.path.abspath(__file__)))
+    devfolder = os.path.abspath(args.device_files or os.getcwd())
+    out = os.path.abspath(args.out or (source + "-port-AUTO"))
+    if not os.path.isdir(source):
+        log("[-] source not found: %s" % source)
+        return 2
+    det, paths = detect_device_from_folder(devfolder, log)
+    old = discover_tokens(source)
+    log("[auto] base discovered: %s" % json.dumps(old, ensure_ascii=False))
+    params = {
+        "codename": det["codename"] or old.get("codename", ""),
+        "model": det["model"] or old.get("model", ""),
+        "build": det["build"] or old.get("build", ""),
+        "kmi": old.get("kmi", "android13-5.15"),
+        "android": "", "oneui": "", "partitions": "",
+        "update_versions": True,
+    }
+    if not params["model"]:
+        log("[-] could not derive the model — put boot.img/kallsyms.txt or a firmware file "
+            "whose name contains the model (e.g. AP_S928BXXX_…) in the device folder")
+        return 2
+    res = run_port(source, out, params, log=log, dry_run=False)
+    syms = {}
+    boot = paths.get("boot") or paths.get("kernel")
+    if boot:
+        try:
+            ban = analyze_boot_file(boot, log=log)
+            res["boot"] = ban
+            res["phys_load"] = ban.get("phys_load") or 0
+        except Exception as exc:
+            log("[auto] boot analysis failed (continuing with kallsyms): %s" % exc)
+    if paths.get("kallsyms"):
+        tb = (res.get("boot") or {}).get("text_base") or 0
+        syms = parse_kallsyms(paths["kallsyms"], 0, log=log)
+        if not tb and syms.get("_text"):
+            tb = syms["_text"]["addr"]
+            log("[auto] KIMAGE_TEXT_BASE from kallsyms _text: 0x%x" % tb)
+        for k in syms:
+            a = syms[k]["addr"]
+            syms[k]["off"] = a - tb if (tb and a >= tb) else a
+        res["text_base"] = tb
+    else:
+        log("[auto] no kallsyms.txt in device folder — headers left untouched; "
+            "drop kallsyms.txt beside boot.img to auto-patch all offsets")
+    n = auto_patch_offsets(out, res, syms, log=log)
+    log("[auto] %d header file(s) auto-patched with device offsets" % n)
+    apk = None
+    if not args.skip_build:
+        g = os.path.join(out, "gradlew")
+        if os.path.exists(g):
+            import stat, subprocess
+            os.chmod(g, os.stat(g).st_mode | stat.S_IEXEC)
+            log("[auto] building APK (gradlew :app:assembleDebug)…")
+            try:
+                r = subprocess.run([g, ":app:assembleDebug", "--no-daemon"],
+                                   cwd=out, capture_output=True, text=True, timeout=1800)
+            except Exception as exc:
+                log("[auto] gradle wrapper failed: %s" % exc)
+                return 1
+            if r.returncode == 0:
+                cand = os.path.join(out, "app", "build", "outputs", "apk", "debug")
+                apks = (sorted(os.path.join(cand, f) for f in os.listdir(cand)
+                               if f.endswith(".apk")) if os.path.isdir(cand) else [])
+                apk = apks[-1] if apks else None
+                log("[auto] APK built: %s" % apk)
+            else:
+                log("[auto] gradle build failed rc=%d (tail: %s)"
+                    % (r.returncode, (r.stderr or r.stdout)[-500:]))
+        else:
+            log("[auto] no gradlew in output — skipped build")
+    log("[+] AUTO DONE  out=%s  offsets_patched=%d  apk=%s" % (out, n, apk or "none"))
+    return 0
+
+
+# --------------------------------------------------------------------------
 # GUI (Tkinter)
 # --------------------------------------------------------------------------
 
@@ -931,6 +1133,7 @@ def _gui_main():
             ttk.Button(btns, text=UI["generate"], command=lambda: self.generate(False)).pack(side="left", padx=4)
             ttk.Button(btns, text=UI["dryrun"], command=lambda: self.generate(True)).pack(side="left", padx=4)
             ttk.Button(btns, text="Boot Analyzer  محلّل البوت", command=self.open_boot_analyzer).pack(side="left", padx=4)
+            ttk.Button(btns, text="Auto  أوتوماتيك", command=self.open_auto).pack(side="left", padx=4)
 
             ttk.Label(left, text=UI["preview"]).grid(row=r, column=0, sticky="w", **pad); r += 1
             self.preview = tk.Listbox(left, height=8, width=64)
@@ -1028,6 +1231,28 @@ def _gui_main():
         def open_boot_analyzer(self):
             _boot_gui_window(self.root)
 
+        def open_auto(self):
+            src = filedialog.askdirectory(title="مجلد البورت المصدر  Source port folder")
+            if not src:
+                return
+            dev = filedialog.askdirectory(title="مجلد ملفات الجهاز  Device files (boot/kallsyms)")
+            if not dev:
+                return
+
+            def worker():
+                self.log("\n----- AUTO PIPELINE -----")
+                try:
+                    import types
+                    a = types.SimpleNamespace(auto=True, source=src, out=src + "-port-AUTO",
+                                              device_files=dev, skip_build=False)
+                    main_auto(a, log=self.log)
+                    self.log("[+] " + UI["done"])
+                except Exception as exc:
+                    self.log("[-] auto: %s" % exc)
+
+            import threading
+            threading.Thread(target=worker, daemon=True).start()
+
     root = tk.Tk()
     PortGUI(root)
     root.mainloop()
@@ -1040,6 +1265,8 @@ def _gui_main():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    if getattr(args, "auto", False):
+        return main_auto(args)
     if getattr(args, "analyze_boot", False):
         return main_boot_analyzer(args)
     if args.cli:
