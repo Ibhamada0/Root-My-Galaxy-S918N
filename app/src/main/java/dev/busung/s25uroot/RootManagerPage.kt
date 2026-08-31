@@ -91,6 +91,15 @@ private fun queryRoot(): RootState {
     )
 }
 
+private fun startShizuku() {
+    val dd = "/data/local/tmp/rmg-shizuku/shizuku_server.apk"
+    val cmd = "nohup sh -c 'CLASSPATH=" + dd + " app_process /system/bin --nice-name=shizuku_server moe.shizuku.server.ShizukuServer' >/dev/null 2>&1 &"
+    runCatching {
+        val p = ProcessBuilder("su", "-c", cmd).redirectErrorStream(true).start()
+        p.waitFor(3, TimeUnit.SECONDS)
+    }
+}
+
 private fun openManagerApp(context: Context) {
     val pm = context.packageManager
     val intent = pm.getLaunchIntentForPackage("me.weishu.kernelsu")
@@ -232,6 +241,9 @@ fun RootManagerPage(padding: PaddingValues) {
             }
             OutlinedButton(onClick = { openManagerApp(context) }) {
                 Text("Open manager app")
+            }
+            OutlinedButton(onClick = { scope.launch { startShizuku() } }) {
+                Text("Start Shizuku server (standalone)")
             }
         }
     }

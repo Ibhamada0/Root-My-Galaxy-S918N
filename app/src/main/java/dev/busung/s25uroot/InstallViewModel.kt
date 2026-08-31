@@ -211,7 +211,22 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 setPhase(InstallPhase.LoadingKernelSu, app.getString(R.string.status_ksu_loading))
                 installKernelSu(payloads)
 
-                setPhase(
+                                // --- v0.4.6: grant this app KernelSU su access (allowlist) + stage bundled Shizuku server ---
+                runCatching {
+                    runHelper("-c", "mkdir -p /data/adb/ksu")
+                    val grant = runHelper("-c", "grep -qx dev.busung.s25uroot /data/adb/ksu/.allowlist 2>/dev/null || echo dev.busung.s25uroot >> /data/adb/ksu/.allowlist; chmod 644 /data/adb/ksu/.allowlist")
+                    appendLog("[i] ksu allowlist grant rc=" + grant.exitCode)
+                }.onFailure { appendLog("[!] allowlist grant failed: " + it.message) }
+                runCatching {
+                    val dd = "/data/local/tmp/rmg-shizuku"
+                    runHelper("-c", "mkdir -p " + dd + "; rm -f " + dd + "/shizuku_server.apk")
+                    app.assets.open("shizuku/shizuku_server.apk").use { input ->
+                        input.copyTo(java.io.File(app.cacheDir, "shizuku_server.apk").outputStream())
+                    }
+                    runHelper("-c", "cp " + java.io.File(app.cacheDir, "shizuku_server.apk").absolutePath + " " + dd + "/shizuku_server.apk; chmod 755 " + dd + "/shizuku_server.apk")
+                    appendLog("[i] shizuku server staged to " + dd + "/shizuku_server.apk")
+                }.onFailure { appendLog("[!] shizuku stage failed: " + it.message) }
+setPhase(
                     InstallPhase.Installed,
                     app.getString(
                         if (AppPreferences.ksuVariant(app) == KsuVariant.Next) {
