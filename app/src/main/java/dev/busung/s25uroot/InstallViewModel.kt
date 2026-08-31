@@ -226,6 +226,10 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                     runHelper("-c", "cp " + java.io.File(app.cacheDir, "shizuku_server.apk").absolutePath + " " + dd + "/shizuku_server.apk; chmod 755 " + dd + "/shizuku_server.apk")
                     appendLog("[i] shizuku server staged to " + dd + "/shizuku_server.apk")
                 }.onFailure { appendLog("[!] shizuku stage failed: " + it.message) }
+runCatching {
+    val start = runHelper("-c", "nohup sh -c 'CLASSPATH=/data/local/tmp/rmg-shizuku/shizuku_server.apk app_process /system/bin --nice-name=shizuku_server moe.shizuku.server.ShizukuServer' >/dev/null 2>&1 &")
+    appendLog("[i] shizuku server auto-start issued: " + start.toString())
+}.onFailure { appendLog("[!] shizuku auto-start failed: " + it.message) }
 setPhase(
                     InstallPhase.Installed,
                     app.getString(

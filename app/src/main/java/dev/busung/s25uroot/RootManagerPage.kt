@@ -48,6 +48,8 @@ private data class RootState(
     val ksudVersion: String = "",
     val modules: List<String> = emptyList(),
     val apps: List<String> = emptyList(),
+    val kernelVersion: String = "",
+    val selinux: String = "",
     val note: String = "",
 )
 
@@ -75,6 +77,8 @@ private fun queryRoot(): RootState {
         .ifEmpty { runRoot("ksud module list") }
     val appsRaw = runRoot("/data/local/tmp/ksud-selected app_list")
         .ifEmpty { runRoot("ksud app_list") }
+    val kernelVersion = runRoot("uname -r")
+    val selinux = runRoot("getenforce").ifEmpty { runRoot("cat /sys/fs/selinux/enforce") }
     val note = if (rooted) {
         ""
     } else {
@@ -87,6 +91,8 @@ private fun queryRoot(): RootState {
         ksudVersion = v.ifEmpty { "unknown" },
         modules = modsRaw.lines().filter { it.isNotBlank() }.take(20),
         apps = appsRaw.lines().filter { it.isNotBlank() }.take(30),
+        kernelVersion = kernelVersion,
+        selinux = selinux,
         note = note,
     )
 }
@@ -192,6 +198,22 @@ fun RootManagerPage(padding: PaddingValues) {
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = FontFamily.Monospace,
             )
+            if (state.kernelVersion.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "kernel: " + state.kernelVersion,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+            if (state.selinux.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "selinux: " + state.selinux,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
         }
 
         // permissions card
