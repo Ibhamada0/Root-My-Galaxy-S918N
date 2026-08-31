@@ -215,7 +215,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 runCatching {
                     runHelper("-c", "mkdir -p /data/adb/ksu")
                     val grant = runHelper("-c", "grep -qx dev.busung.s25uroot /data/adb/ksu/.allowlist 2>/dev/null || echo dev.busung.s25uroot >> /data/adb/ksu/.allowlist; chmod 644 /data/adb/ksu/.allowlist")
-                    appendLog("[i] ksu allowlist grant rc=" + grant.exitCode)
+                    appendLog("[i] ksu allowlist grant done: " + grant.toString())
                 }.onFailure { appendLog("[!] allowlist grant failed: " + it.message) }
                 runCatching {
                     val dd = "/data/local/tmp/rmg-shizuku"
