@@ -522,6 +522,91 @@ def parse_elf(buf, log=None):
     }
 
 
+def arm64_image_info(buf, log=None):
+    """Detect a raw ARM64 kernel Image (magic b'ARM\\x64' at offset 0x38).
+    Returns dict(text_offset, image_size) or None."""
+    log = log or (lambda s: None)
+    import struct
+    if len(buf) < 0x40 or buf[0x38:0x3c] != b"ARM\x64":
+        return None
+    text_offset = struct.unpack_from("<Q", buf, 8)[0]
+    image_size = struct.unpack_from("<Q", buf, 16)[0]
+    log("[*] ARM64 Image: text_offset=0x%x image_size=0x%x"
+        % (text_offset, image_size))
+    log("    Samsung phys base is normally 0x80000000; P0_KERNEL_PHYS_LOAD = "
+        "0x80000000 + text_offset (or the plain phys base used by the ROM). "
+        "Verify against your target.h.")
+    return {"text_offset": text_offset, "image_size": image_size}
+
+
+def decompress_payload(buf, log=None):
+    """Try gzip / lz4-frame / zstd decompression.
+    Returns (decompressed_bytes, name) or (None, None)."""
+    log = log or (lambda s: None)
+    if buf[:2] == b"\x1f\x8b":
+        import gzip
+        return gzip.decompress(buf), "gzip"
+    if buf[:4] == b"\x04\x22\x4d\x18":
+        try:
+            import lz4.frame
+            return lz4.frame.decompress(buf), "lz4-frame"
+        except Exception:
+            pass
+    if buf[:4] == b"\x28\xb5\x2f\xfd":
+        try:
+            import zstandard
+            return zstandard.ZstdDecompressor().decompress(buf), "zstd"
+        except Exception:
+            pass
+    return None, None
+
+
+def _scan_payload_offset(payload, log=None):
+    """Scan the first 2 MB (4 KB-aligned) for a known payload magic.
+    Returns (offset, kind) or (None, None)."""
+    log = log or (lambda s: None)
+    limit = min(len(payload), 2 * 1024 * 1024)
+    for off in range(0, limit, 0x1000):
+        seg = payload[off:off + 64]
+        if seg[:4] == b"\x7fELF":
+            return off, "elf"
+        if seg[0x38:0x3c] == b"ARM\x64":
+            return off, "arm64-image"
+        if seg[:2] == b"\x1f\x8b" or seg[:4] in (b"\x04\x22\x4d\x18", b"\x28\xb5\x2f\xfd", b"\xfd7zXZ\x00"):
+            return off, "compressed"
+    return None, None
+
+
+def _unpack_kernel_payload(payload, res, log):
+    """ELF -> parse; ARM64 Image -> detect; compressed -> decompress & recurse.
+    Falls back to scanning for a known payload at an aligned offset; if nothing
+    is found the payload type is recorded as unknown and offsets must come from
+    kallsyms (KIMAGE_TEXT_BASE = `_text`, Samsung phys base 0x80000000)."""
+    if payload[:4] == b"\x7fELF":
+        res["payload_type"] = "elf"
+        res["elf"] = parse_elf(payload, log)
+        return payload
+    ai = arm64_image_info(payload, log)
+    if ai is not None:
+        res["payload_type"] = "arm64-image"
+        res["arm64_image"] = ai
+        return payload
+    dec, name = decompress_payload(payload, log)
+    if dec is not None:
+        log("[*] kernel payload is %s-compressed -> %d bytes" % (name, len(dec)))
+        return _unpack_kernel_payload(dec, res, log)
+    off, kind = _scan_payload_offset(payload, log)
+    if off is not None:
+        log("[*] payload magic found at file offset 0x%x (kind=%s)" % (off, kind))
+        res["kernel_offset"] = off
+        return _unpack_kernel_payload(payload[off:], res, log)
+    res["payload_type"] = "unknown"
+    log("[!] kernel payload format unrecognized (magic=%r); offsets will be "
+        "derived from kallsyms only (KIMAGE_TEXT_BASE = `_text`, Samsung phys "
+        "base assumed 0x80000000 — verify against the device)." % payload[:8])
+    return payload
+
+
 def analyze_boot_file(boot_path, log=None):
     """Analyze boot.img (Android v0-v4), boot.img.lz4, or a raw kernel ELF.
     Returns dict with format, kernel offset, and ELF-derived addresses."""
@@ -532,40 +617,58 @@ def analyze_boot_file(boot_path, log=None):
     res = {"file": boot_path, "unpacked": path, "size": len(buf)}
     if buf[:8] == b"ANDROID!":
         kernel_size = struct.unpack_from("<I", buf, 8)[0]
-        kernel_addr = struct.unpack_from("<I", buf, 16)[0]
-        page_size = struct.unpack_from("<I", buf, 36)[0]
-        hdr_ver = struct.unpack_from("<I", buf, 40)[0]
+        hdr_ver = struct.unpack_from("<I", buf, 40)[0] if len(buf) >= 44 else 0
         res["format"] = "android-boot-v%d" % hdr_ver
-        log("[*] Android boot image v%d page=%d kernel_addr=0x%x kernel_size=%d"
-            % (hdr_ver, page_size, kernel_addr, kernel_size))
         if hdr_ver >= 3:
-            koff, ksize = 4096, len(buf) - 4096
-        else:
-            koff, ksize = page_size, kernel_size
-        if buf[koff:koff + 4] == b"\x7fELF":
+            # v3/v4: kernel starts immediately after the fixed 4096-byte header
+            koff, ksize = 4096, kernel_size or (len(buf) - 4096)
             res["kernel_offset"] = koff
-            res["elf"] = parse_elf(buf[koff:koff + ksize], log)
+            log("[*] Android boot image v%d (no page table) kernel at 0x%x size=%d"
+                % (hdr_ver, koff, ksize))
         else:
-            for pg in range(1, 9):
-                off = pg * (page_size or 4096)
-                if buf[off:off + 4] == b"\x7fELF":
-                    res["kernel_offset"] = off
-                    res["elf"] = parse_elf(buf[off:], log)
-                    break
-            else:
-                raise RuntimeError("no ELF kernel found inside the Android boot image")
+            page_size = struct.unpack_from("<I", buf, 36)[0] or 4096
+            kernel_addr = struct.unpack_from("<I", buf, 12)[0]
+            koff, ksize = page_size, kernel_size
+            res["kernel_offset"] = koff
+            res["kernel_addr"] = kernel_addr
+            log("[*] Android boot image v%d page=%d kernel_addr=0x%x size=%d"
+                % (hdr_ver, page_size, kernel_addr, kernel_size))
+        _unpack_kernel_payload(buf[koff:koff + ksize], res, log)
     elif buf[:4] == b"\x7fELF":
         res["format"] = "raw-elf-kernel"
         res["kernel_offset"] = 0
+        res["payload_type"] = "elf"
         res["elf"] = parse_elf(buf, log)
+    elif arm64_image_info(buf, log) is not None:
+        res["format"] = "raw-arm64-image"
+        res["kernel_offset"] = 0
+        res["payload_type"] = "arm64-image"
+        res["arm64_image"] = arm64_image_info(buf, log) or {}
     else:
-        raise RuntimeError("unrecognized file: not ANDROID! boot image, not ELF kernel, "
-                           "not .lz4 (magic=%r)" % buf[:8])
-    elf = res["elf"]
-    res["text_base"] = elf["text_vaddr"]
-    res["phys_load"] = elf["text_paddr"]
-    res["phys_load_masked"] = elf["text_paddr"] & ~(0x200000 - 1)
-    res["entry"] = elf["entry"]
+        dec, name = decompress_payload(buf, log)
+        if dec is not None:
+            log("[*] kernel payload is %s-compressed -> %d bytes" % (name, len(dec)))
+            _unpack_kernel_payload(dec, res, log)
+        else:
+            raise RuntimeError(
+                "unrecognized file: not ANDROID! boot image, not ELF kernel, "
+                "not ARM64 Image, not gzip/lz4/zstd (magic=%r)" % buf[:8])
+    if res.get("elf"):
+        elf = res["elf"]
+        res["text_base"] = elf["text_vaddr"]
+        res["phys_load"] = elf["text_paddr"]
+        res["phys_load_masked"] = elf["text_paddr"] & ~(0x200000 - 1)
+        res["entry"] = elf["entry"]
+    else:
+        ai = res.get("arm64_image") or {}
+        res["text_base"] = 0  # resolved from kallsyms `_text` or --text-base
+        res["phys_load"] = (0x80000000 + ai.get("text_offset", 0)) & 0xFFFFFFFF
+        res["phys_load_masked"] = res["phys_load"] & ~(0x200000 - 1)
+        # unknown payload: fall back to the Samsung Exynos phys base (0x80000000)
+        if res.get("payload_type") == "unknown":
+            res["phys_load"] = 0x80000000
+            res["phys_load_masked"] = 0x80000000
+        res["entry"] = 0
     return res
 
 
@@ -657,16 +760,22 @@ def main_boot_analyzer(args, log=None):
         return 2
     params = {"model": args.model or "", "codename": args.codename or ""}
     res = analyze_boot_file(args.boot, log=log)
+    syms = {}
+    if args.kallsyms:
+        syms = parse_kallsyms(args.kallsyms, 0, log=log)
     text_base = res["text_base"]
     if args.text_base:
         text_base = int(args.text_base, 0)
         log("[*] KIMAGE_TEXT_BASE overridden: 0x%x" % text_base)
-    syms = {}
-    if args.kallsyms:
-        syms = parse_kallsyms(args.kallsyms, text_base, log=log)
-    else:
-        log("[!] no kallsyms provided — symbol offsets skipped "
-            "(recommended: --kallsyms kallsyms.txt)")
+    elif not text_base and syms.get("_text"):
+        text_base = syms["_text"]["addr"]
+        log("[*] KIMAGE_TEXT_BASE from kallsyms _text: 0x%x" % text_base)
+    if not text_base:
+        raise SystemExit("[!] cannot determine KIMAGE_TEXT_BASE — pass --text-base "
+                         "0xffffffc008000000 (kallsyms `_text`) or a kallsyms file")
+    for k in syms:
+        a = syms[k]["addr"]
+        syms[k]["off"] = a - text_base if a > text_base else a
     _dump_offsets_table(res, syms, log=log)
     header = build_offsets_header(res, syms, params, log=log)
     out = args.out_offsets or ("device_offsets_%s.h" % (params["model"] or "DEVICE"))
@@ -722,14 +831,20 @@ def _boot_gui_window(parent):
         try:
             params = {"model": v["model"].get().strip() or "DEVICE", "codename": ""}
             res = analyze_boot_file(boot, log=log)
+            syms = {}
+            if v["kallsyms"].get().strip():
+                syms = parse_kallsyms(v["kallsyms"].get().strip(), 0, log=log)
+            else:
+                log("[!] بدون kallsyms — أوفستات P0 فقط متاحة")
             tb = res["text_base"]
             if v["textbase"].get().strip():
                 tb = int(v["textbase"].get().strip(), 0)
-            syms = {}
-            if v["kallsyms"].get().strip():
-                syms = parse_kallsyms(v["kallsyms"].get().strip(), tb, log=log)
-            else:
-                log("[!] بدون kallsyms — أوفستات P0 فقط متاحة")
+            elif not tb and syms.get("_text"):
+                tb = syms["_text"]["addr"]
+                log("[*] KIMAGE_TEXT_BASE من kallsyms _text: 0x%x" % tb)
+            for k in syms:
+                a = syms[k]["addr"]
+                syms[k]["off"] = a - tb if (tb and a > tb) else a
             _dump_offsets_table(res, syms, log=log)
             header = build_offsets_header(res, syms, params, log=log)
             out = v["out"].get().strip() or ("device_offsets_%s.h" % params["model"])
