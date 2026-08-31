@@ -553,6 +553,150 @@ def arm64_image_info(buf, log=None):
     return {"text_offset": text_offset, "image_size": image_size}
 
 
+def extract_kallsyms_image(payload, text_base=None, log=None):
+    """Extract ALL symbol addresses from a kernel Image's embedded kallsyms
+    tables (CONFIG_KALLSYMS + BASE_RELATIVE). Pure-python token decompression.
+    Returns dict(name->virt_addr) or None if tables are not found.
+
+    Layout (arm64, 5.15, little-endian):
+      [u32 offsets[N]] [u64 relative_base] [u32 num_syms]
+      [u8 names[...]] [u32 markers[M]] [u8 token_table] [u16 token_index[256]]
+    """
+    log = log or (lambda s: None)
+    import struct
+    n = len(payload)
+
+    # ---- step 1: locate token_index + token_table -------------------------
+    idx_pos = None
+    tt_start = 0
+    tokens = []
+    pos = 0
+    cand = 0
+    while True:
+        pos = payload.find(b"\x00\x00", pos)
+        if pos < 0 or pos + 512 > n or cand > 400000:
+            break
+        cand += 1
+        if pos % 2:
+            pos += 2
+            continue
+        idx = struct.unpack_from("<256H", payload, pos)
+        ok = True
+        for j in range(1, 256):
+            d = idx[j] - idx[j - 1]
+            if not (0 < d <= 64) or idx[j] >= 8192:
+                ok = False
+                break
+        if not ok:
+            pos += 2
+            continue
+        # token table sits immediately before token_index; recover its start by
+        # locating the last token string, then re-validate ALL tokens
+        g = pos - idx[255] - 64
+        if g < 0:
+            pos += 2
+            continue
+        e = payload.find(b"\x00", g + idx[255], g + idx[255] + 80)
+        if e < 0:
+            pos += 2
+            continue
+        last_len = e - (g + idx[255])
+        T = pos - idx[255] - last_len - 1
+        if T < 0:
+            pos += 2
+            continue
+        toks, ok = [], True
+        for j in range(256):
+            s = T + idx[j]
+            if s + 64 > n:
+                ok = False
+                break
+            e = payload.find(b"\x00", s, s + 64)
+            if e < 0:
+                ok = False
+                break
+            t = payload[s:e]
+            if len(t) > 40 or any(c < 0x20 or c > 0x7E for c in t):
+                ok = False
+                break
+            toks.append(t.decode("latin1"))
+        if ok:
+            idx_pos = pos
+            tt_start = T
+            tokens = toks
+            break
+        pos += 2
+    if idx_pos is None:
+        log("[!] image extraction: kallsyms token table not found")
+        return None
+
+    # ---- step 2: locate relative_base (compile-time _text) ----------------
+    if text_base is None:
+        text_base = 0xFFFFFFC008000000  # common Samsung/arm64 link base
+    pat = struct.pack("<Q", text_base)
+    rb_pos = payload.find(pat)
+    if rb_pos < 8:
+        log("[!] image extraction: kallsyms_relative_base pattern not found "
+            "(base=0x%x)" % text_base)
+        return None
+
+    # ---- step 3: num_syms (+ fallback u64) -> markers -> names ------------
+    def try_decode(nsyms_u, offset_bytes):
+        M = (nsyms_u + 255) // 256
+        markers_start = tt_start - 4 * M
+        names_start = rb_pos + 12
+        if markers_start <= names_start or markers_start > n:
+            return None
+        markers = struct.unpack_from("<%dI" % M, payload, markers_start)
+        if markers[0] != 0 or any(markers[k] >= markers_start - names_start
+                                  for k in range(M)):
+            return None
+        if any(markers[k] < markers[k - 1] for k in range(1, M)):
+            return None
+        idxs = struct.unpack_from("<%dI" % nsyms_u, payload, rb_pos - offset_bytes * nsyms_u)
+        return markers, markers_start, idxs
+
+    chain = try_decode(struct.unpack_from("<I", payload, rb_pos + 8)[0], 4)
+    if chain is None:
+        chain = try_decode(struct.unpack_from("<Q", payload, rb_pos + 8)[0], 8)
+    if chain is None:
+        log("[!] image extraction: kallsyms chain validation failed")
+        return None
+    markers, markers_start, offs = chain
+    names_start = rb_pos + 12
+    names_end = markers_start
+
+    # ---- step 4: decode all symbol names -----------------------------------
+    syms = {}
+    p = names_start
+    for i in range(len(offs)):
+        l = payload[p]
+        p += 1
+        name_parts = []
+        for _ in range(l):
+            t = payload[p]
+            p += 1
+            if t < 256:
+                name_parts.append(tokens[t])
+        name = "".join(name_parts)
+        if not name and l == 0:
+            pass
+        addr = (text_base + (offs[i] & 0xFFFFFFFF)) & 0xFFFFFFFFFFFFFFFF
+        syms.setdefault(name, addr)
+        if p >= names_end:
+            break
+    log("[*] image extraction: decoded %d symbols (num_syms=%d) "
+        "relative_base=0x%x" % (len(syms), len(offs), text_base))
+    for probe in ("_text", "init_task", "commit_creds"):
+        if probe in syms:
+            log("    probe %-16s 0x%016x" % (probe, syms[probe]))
+    if "init_task" not in syms:
+        log("[!] image extraction: decoded names do NOT look like a kernel "
+            "kallsyms table (no init_task) — result unreliable")
+        return syms
+    return syms
+
+
 def decompress_payload(buf, log=None):
     """Try gzip / lz4-frame / zstd decompression.
     Returns (decompressed_bytes, name) or (None, None)."""
@@ -675,7 +819,7 @@ def analyze_boot_file(boot_path, log=None):
         res["entry"] = elf["entry"]
     else:
         ai = res.get("arm64_image") or {}
-        res["text_base"] = 0  # resolved from kallsyms `_text` or --text-base
+        res["text_base"] = 0  # resolved from embedded kallsyms `_text` below
         res["phys_load"] = (0x80000000 + ai.get("text_offset", 0)) & 0xFFFFFFFF
         res["phys_load_masked"] = res["phys_load"] & ~(0x200000 - 1)
         # unknown payload: fall back to the Samsung Exynos phys base (0x80000000)
@@ -683,6 +827,26 @@ def analyze_boot_file(boot_path, log=None):
             res["phys_load"] = 0x80000000
             res["phys_load_masked"] = 0x80000000
         res["entry"] = 0
+    # ---- automatic kallsyms extraction straight from the kernel image ----
+    payload = None
+    if res.get("payload_type") == "elf":
+        pass  # ELF parse gives vaddr; kallsyms extraction also possible via scan
+    try:
+        if res.get("format") == "android-boot-v%d" % (res.get("format") and 0):
+            pass
+    except Exception:
+        pass
+    # re-read the payload buffer (file offset known) for extraction
+    buf2 = buf
+    koff = res.get("kernel_offset") or 0
+    payload = buf2[koff:]
+    img = extract_kallsyms_image(payload, log=log)
+    if img:
+        res["kallsyms_image"] = img
+        if not res.get("text_base") and "_text" in img:
+            res["text_base"] = img["_text"]
+            log("[*] KIMAGE_TEXT_BASE from embedded kallsyms `_text`: 0x%x"
+                % res["text_base"])
     return res
 
 
@@ -777,6 +941,14 @@ def main_boot_analyzer(args, log=None):
     syms = {}
     if args.kallsyms:
         syms = parse_kallsyms(args.kallsyms, 0, log=log)
+    elif res.get("kallsyms_image"):
+        for nm, ad in res["kallsyms_image"].items():
+            syms[nm] = {"addr": ad, "off": 0}
+        log("[*] using %d symbols extracted automatically from the kernel image"
+            % len(syms))
+    else:
+        log("[!] no kallsyms file and nothing extractable from the image — "
+            "only P0 offsets available")
     text_base = res["text_base"]
     if args.text_base:
         text_base = int(args.text_base, 0)
@@ -786,7 +958,7 @@ def main_boot_analyzer(args, log=None):
         log("[*] KIMAGE_TEXT_BASE from kallsyms _text: 0x%x" % text_base)
     if not text_base:
         raise SystemExit("[!] cannot determine KIMAGE_TEXT_BASE — pass --text-base "
-                         "0xffffffc008000000 (kallsyms `_text`) or a kallsyms file")
+                         "0xffffffc008000000 or provide kallsyms.txt")
     res["text_base"] = text_base
     for k in syms:
         a = syms[k]["addr"]
@@ -849,8 +1021,12 @@ def _boot_gui_window(parent):
             syms = {}
             if v["kallsyms"].get().strip():
                 syms = parse_kallsyms(v["kallsyms"].get().strip(), 0, log=log)
+            elif res.get("kallsyms_image"):
+                for nm, ad in res["kallsyms_image"].items():
+                    syms[nm] = {"addr": ad, "off": 0}
+                log("[*] %d رمز مستخرج تلقائيًا من صورة النواة نفسها" % len(syms))
             else:
-                log("[!] بدون kallsyms — أوفستات P0 فقط متاحة")
+                log("[!] بدون kallsyms وغير قابل للاستخراج من الصورة — P0 فقط")
             tb = res["text_base"]
             if v["textbase"].get().strip():
                 tb = int(v["textbase"].get().strip(), 0)
@@ -1030,9 +1206,22 @@ def main_auto(args, log=None):
             a = syms[k]["addr"]
             syms[k]["off"] = a - tb if (tb and a >= tb) else a
         res["text_base"] = tb
+    elif (res.get("boot") or {}).get("kallsyms_image"):
+        tb = (res.get("boot") or {}).get("text_base") or 0
+        imp = res["boot"]["kallsyms_image"]
+        for nm, ad in imp.items():
+            syms[nm] = {"addr": ad, "off": 0}
+        if not tb and syms.get("_text"):
+            tb = syms["_text"]["addr"]
+        for k in syms:
+            a = syms[k]["addr"]
+            syms[k]["off"] = a - tb if (tb and a >= tb) else a
+        res["text_base"] = tb
+        log("[auto] %d symbol(s) extracted directly from the kernel image — "
+            "kallsyms.txt not needed" % len(syms))
     else:
-        log("[auto] no kallsyms.txt in device folder — headers left untouched; "
-            "drop kallsyms.txt beside boot.img to auto-patch all offsets")
+        log("[auto] no kallsyms.txt and nothing extractable from the image — "
+            "drop kallsyms.txt beside boot.img OR use a non-stripped kernel Image")
     n = auto_patch_offsets(out, res, syms, log=log)
     log("[auto] %d header file(s) auto-patched with device offsets" % n)
     apk = None
