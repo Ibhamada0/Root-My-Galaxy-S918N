@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.rootmygalaxy.s23ultra"
         minSdk = 33
         targetSdk = 36
-        versionCode = 34
-        versionName = "0.3.3"
+        versionCode = 35
+        versionName = "0.3.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
@@ -51,10 +51,10 @@ android {
     }
         signingConfigs {
             create("release") {
-                storeFile = File(System.getProperty("user.home"), ".android/debug.keystore")
-                storePassword = "android"
-                keyAlias = "androiddebugkey"
-                keyPassword = "android"
+                storeFile = file("signing/release.jks")
+                storePassword = "rootmygalaxy"
+                keyAlias = "s918nrelease"
+                keyPassword = "rootmygalaxy"
             }
         }
 

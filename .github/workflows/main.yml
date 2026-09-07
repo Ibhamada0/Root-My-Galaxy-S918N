@@ -46,14 +46,12 @@ jobs:
         run: |
           "$ANDROID_SDK_ROOT"/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "cmake;3.22.1" >/dev/null 2>&1 || echo "sdkmanager install skipped; relying on AGP auto-download"
 
-      - name: Prepare signing keystore
+      - name: Verify release signing keystore (persistent in repo)
         run: |
-          mkdir -p "$HOME/.android"
-          keytool -genkeypair -v \
-            -keystore "$HOME/.android/debug.keystore" \
-            -storepass android -keypass android \
-            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
+          set -euo pipefail
+          test -f app/signing/release.jks || { echo "Keystore missing"; exit 1; }
+          keytool -list -keystore app/signing/release.jks -storepass rootmygalaxy | grep -q "s918nrelease" || { echo "Keystore alias missing"; exit 1; }
+          echo "Signing keystore present and intact."
 
       - name: Resolve release tag
         id: tag
