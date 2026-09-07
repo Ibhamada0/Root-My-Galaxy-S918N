@@ -276,19 +276,22 @@ private const val SHIZUKU_MANAGER_URL = "https://github.com/thedjchi/Shizuku/rel
 private fun isKernelSuManagerInstalled(context: Context, variant: KsuVariant): Boolean =
     context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant)) != null
 
-private fun managerAssetName(variant: KsuVariant): String = "managers/kernelsu-manager.apk"
+private fun managerAssetName(variant: KsuVariant): String = when (variant) {
+    KsuVariant.Next -> "managers/ksunext-manager.apk"
+    KsuVariant.Regular -> "managers/kernelsu-manager.apk"
+}
 
 private fun managerCacheFile(context: Context, variant: KsuVariant): java.io.File =
-    java.io.File(context.cacheDir, "kernelsu-manager.apk")
+    java.io.File(context.cacheDir, managerAssetName(variant).substringAfterLast('/'))
 
 private fun openKernelSuManager(context: Context, variant: KsuVariant) {
-    val pkg = KERNEL_SU_MANAGER_PACKAGE_REGULAR
+    val pkg = kernelSuManagerPackage(variant)
     context.packageManager.getLaunchIntentForPackage(pkg)?.let { context.startActivity(it); return }
 
     // Always install the bundled APK (fully offline - never opens a browser).
     try {
         val apk = managerCacheFile(context, variant)
-        context.assets.open("managers/kernelsu-manager.apk").use { input ->
+        context.assets.open(managerAssetName(variant)).use { input ->
             apk.outputStream().use { output -> input.copyTo(output) }
         }
         // Always hand the APK to the device's system package installer (visible UI),
@@ -330,11 +333,15 @@ private fun launchSystemInstaller(context: Context, apk: java.io.File, pkgToLaun
     context.startActivity(viewIntent)
 }
 
-private fun kernelSuManagerPackage(variant: KsuVariant): String =
-KERNEL_SU_MANAGER_PACKAGE_REGULAR // regular
+private fun kernelSuManagerPackage(variant: KsuVariant): String = when (variant) {
+    KsuVariant.Next -> KERNEL_SU_MANAGER_PACKAGE
+    KsuVariant.Regular -> KERNEL_SU_MANAGER_PACKAGE_REGULAR
+}
 
-private fun kernelSuManagerUrl(variant: KsuVariant): String =
-KERNEL_SU_MANAGER_URL_REGULAR // regular
+private fun kernelSuManagerUrl(variant: KsuVariant): String = when (variant) {
+    KsuVariant.Next -> KERNEL_SU_MANAGER_URL
+    KsuVariant.Regular -> KERNEL_SU_MANAGER_URL_REGULAR
+}
 
 private fun openShizukuManager(context: Context) {
     val launch = context.packageManager.getLaunchIntentForPackage(SHIZUKU_MANAGER_PACKAGE)
@@ -1773,8 +1780,8 @@ private fun SettingsPage(
                         )
                     }
                     FilledTonalButton(
-                        onClick = { openKernelSuManager(settingsContext, KsuVariant.Regular) },
-                        enabled = !isKernelSuManagerInstalled(settingsContext, KsuVariant.Regular),
+                        onClick = { openKernelSuManager(settingsContext, ksuVariant) },
+                        enabled = !isKernelSuManagerInstalled(settingsContext, ksuVariant),
                     ) {
                         Text(stringResource(R.string.settings_install_manager_action))
                     }

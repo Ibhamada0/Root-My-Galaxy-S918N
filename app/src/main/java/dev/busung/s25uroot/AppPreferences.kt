@@ -28,9 +28,27 @@ enum class AppThemeMode(val storedValue: String) {
     }
 }
 
-enum class KsuVariant(val storedValue: String) {
-    Regular("kernelsu"),
-    Next("kernelsu_next");
+enum class KsuVariant(
+    val storedValue: String,
+    val managerAssetPath: String,
+    val managerPackageName: String,
+    val managerHomeUrl: String,
+    val labelResIdRes: Int,
+) {
+    Regular(
+        storedValue = "kernelsu",
+        managerAssetPath = "managers/kernelsu-manager.apk",
+        managerPackageName = "me.weishu.kernelsu",
+        managerHomeUrl = "https://github.com/tiann/KernelSU/releases",
+        labelResIdRes = R.string.ksu_variant_regular,
+    ),
+    Next(
+        storedValue = "kernelsu_next",
+        managerAssetPath = "managers/ksunext-manager.apk",
+        managerPackageName = "com.rifsxd.ksunext",
+        managerHomeUrl = "https://github.com/KernelSU-Next/KernelSU-Next/releases/latest",
+        labelResIdRes = R.string.ksu_variant_next,
+    );
 
     companion object {
         fun fromStoredValue(value: String?): KsuVariant =
@@ -94,9 +112,10 @@ object AppPreferences {
         prefs(context).edit().putBoolean(OPTIMIZE_ON_EXPLOIT, enabled).apply()
     }
 
-    fun ksuVariant(context: Context): KsuVariant = KsuVariant.Regular // KernelSU regular only
+    fun ksuVariant(context: Context): KsuVariant =
+        KsuVariant.fromStoredValue(prefs(context).getString(KSU_VARIANT, null))
 
-    @Deprecated("KernelSU Next removed", level = DeprecationLevel.HIDDEN)
+    @Deprecated("ksuVariantLegacy kept for migration only", level = DeprecationLevel.HIDDEN)
     fun ksuVariantLegacy(context: Context): KsuVariant =
         KsuVariant.fromStoredValue(prefs(context).getString(KSU_VARIANT, null))
 
