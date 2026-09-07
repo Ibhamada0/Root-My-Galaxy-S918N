@@ -499,7 +499,14 @@ setPhase(
         }
 
     private fun nativeHelperFile(): File =
-        File(app.applicationInfo.nativeLibraryDir, "libcve43499root.so")
+        File(
+            app.applicationInfo.nativeLibraryDir,
+            if (AppPreferences.ksuVariant(app) == KsuVariant.Next) {
+                "libcve43499root_next.so"
+            } else {
+                "libcve43499root.so"
+            },
+        )
 
     private fun shizukuEnabled(): Boolean = AppPreferences.shizukuMode(app)
 
