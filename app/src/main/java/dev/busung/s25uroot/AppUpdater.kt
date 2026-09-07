@@ -42,15 +42,23 @@ object AppUpdater {
                 val tag = json.optString("tag_name").trim().removePrefix("v")
                 if (tag.isBlank()) return@withContext null
                 var apkUrl: String? = null
+                var fallbackUrl: String? = null
+                val wantDebug = BuildConfig.DEBUG
                 json.optJSONArray("assets")?.let { assets ->
                     for (i in 0 until assets.length()) {
                         val asset = assets.getJSONObject(i)
-                        if (asset.optString("name").endsWith(".apk")) {
-                            apkUrl = asset.optString("browser_download_url").ifEmpty { null }
+                        val name = asset.optString("name")
+                        val url = asset.optString("browser_download_url").ifEmpty { null } ?: continue
+                        if (!name.endsWith(".apk")) continue
+                        if (fallbackUrl == null) fallbackUrl = url
+                        val isDebugAsset = name.contains("debug")
+                        if (isDebugAsset == wantDebug) {
+                            apkUrl = url
                             break
                         }
                     }
                 }
+                if (apkUrl == null) apkUrl = fallbackUrl
                 UpdateInfo(
                     versionName = tag,
                     apkUrl = apkUrl,
