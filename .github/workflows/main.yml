@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag to publish (default: v<versionName from build.gradle>)'
+        description: 'Explicit release tag (default: v<versionName> from build.gradle.kts)'
         required: false
         type: string
 
@@ -46,7 +46,7 @@ jobs:
         run: |
           "$ANDROID_SDK_ROOT"/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "cmake;3.22.1" >/dev/null 2>&1 || echo "sdkmanager install skipped; relying on AGP auto-download"
 
-      - name: Prepare signing keystore (signs the release APK)
+      - name: Prepare signing keystore
         run: |
           mkdir -p "$HOME/.android"
           keytool -genkeypair -v \
@@ -57,6 +57,7 @@ jobs:
 
       - name: Resolve release tag
         id: tag
+        shell: bash
         run: |
           set -euo pipefail
           if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
@@ -65,7 +66,12 @@ jobs:
             VERSION_NAME="$(grep -oE 'versionName[[:space:]]*=[[:space:]]*"[^"]+"' app/build.gradle.kts | head -n 1 | cut -d'"' -f2)"
             TAG_NAME="${INPUT_TAG_NAME:-v${VERSION_NAME}}"
           fi
+          if [ -z "$TAG_NAME" ]; then
+            echo "No release tag resolved." >&2
+            exit 1
+          fi
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: $TAG_NAME"
         env:
           INPUT_TAG_NAME: ${{ inputs.tag_name }}
 
@@ -75,7 +81,7 @@ jobs:
       - name: Build debug and release APKs
         run: ./gradlew :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Upload artifacts
+      - name: Upload pipeline artifacts (downloadable from Actions)
         uses: actions/upload-artifact@v4
         with:
           name: RootMyGalaxy-apks
@@ -85,22 +91,59 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Ensure release tag exists
-        run: |
-          set -euo pipefail
-          if ! git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
-            git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
-            git push origin "refs/tags/$TAG_NAME"
-          fi
+      - name: Create and push explicit git tag BEFORE release publish
+        shell: bash
         env:
           TAG_NAME: ${{ steps.tag.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+            git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+            git push origin "refs/tags/$TAG_NAME"
+            echo "Created and pushed tag $TAG_NAME."
+          else
+            echo "Tag $TAG_NAME already exists on origin."
+            git push origin "refs/tags/$TAG_NAME" || true
+          fi
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag_name }}
-          name: Release ${{ steps.tag.outputs.tag_name }}
-          files: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/apk/debug/*.apk
-          generate_release_notes: true
+      - name: Publish GitHub Release (explicit tag, gh CLI)
+        shell: bash
+        env:
+          TAG_NAME: ${{ steps.tag.outputs.tag_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/apks
+          cp app/build/outputs/apk/debug/*.apk /tmp/apks/
+          cp app/build/outputs/apk/release/*.apk /tmp/apks/
+          ls -la /tmp/apks/
+
+          PREVIOUS_TAG="$(git tag --list 'v*' --sort=-v:refname | grep -Fxv "$TAG_NAME" | head -n 1 || true)"
+          {
+            echo "# Release $TAG_NAME"
+            echo
+            echo "Version: ${TAG_NAME#v}"
+            echo "Commit: $(git rev-parse HEAD)"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "Changes since $PREVIOUS_TAG:"
+              echo
+              git log --format='- %s' "$PREVIOUS_TAG..$TAG_NAME" || true
+            else
+              echo "First tagged release."
+            fi
+          } > /tmp/release-notes.md
+
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists; updating assets."
+            gh release upload "$TAG_NAME" /tmp/apks/* --clobber
+            gh release edit "$TAG_NAME" --notes-file /tmp/release-notes.md --latest
+          else
+            echo "Creating explicit release $TAG_NAME."
+            gh release create "$TAG_NAME" /tmp/apks/* \
+              --title "Release $TAG_NAME" \
+              --notes-file /tmp/release-notes.md \
+              --latest
+          fi
