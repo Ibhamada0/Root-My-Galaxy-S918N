@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+import java.io.File
+
 android {
     namespace = "dev.busung.s25uroot"
     compileSdk = 37
@@ -49,7 +51,7 @@ android {
     }
         signingConfigs {
             create("release") {
-                storeFile = java.io.File(System.getenv("HOME"), ".android/debug.keystore")
+                storeFile = File(System.getProperty("user.home"), ".android/debug.keystore")
                 storePassword = "android"
                 keyAlias = "androiddebugkey"
                 keyPassword = "android"
