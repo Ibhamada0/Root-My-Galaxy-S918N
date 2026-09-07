@@ -60,7 +60,6 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -240,7 +239,6 @@ class MainActivity : ComponentActivity() {
 private enum class AppPage(@StringRes val label: Int, val icon: ImageVector) {
     Overview(R.string.nav_overview, Icons.Rounded.Home),
     History(R.string.nav_history, Icons.Rounded.History),
-    Manager(R.string.nav_manager, Icons.Outlined.Lock),
     Settings(R.string.nav_settings, Icons.Rounded.Settings),
 }
 
@@ -583,9 +581,6 @@ private fun RootApp(
                     padding,
                     history,
                     onDeleteEntries = installViewModel::deleteHistoryEntries,
-                )
-                AppPage.Manager -> RootManagerPage(
-                    padding = padding,
                 )
                 AppPage.Settings -> SettingsPage(
                     padding = padding,
