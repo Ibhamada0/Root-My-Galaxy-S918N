@@ -1,39 +1,39 @@
-name: Build Debug APK
-
-# يبني نسخة الـ debug فقط من تطبيق Root My Galaxy ثم يرفعها كـ
-# artifact واحد. تم حذف جميع خطوات الـ release (signing, apksigner,
-# GitHub Release) لتجنّب الفشل اللي حصل في الـ run السابق
-# (build/release apk = fail). الـ debug وحده يكفي للتجربة على الجهاز.
-# تم تعديل تركيب الـ on: لتفادي الـ error:
-#   Unexpected value 'tags' (Line 13, Col: 3)
+name: Build & Release APK
 
 on:
   push:
-    branches:
-      - main
-      - master
-  pull_request:
-    branches:
-      - main
-      - master
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to publish (default: v<versionName from build.gradle>)'
+        required: false
+        type: string
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: build-and-release
+  cancel-in-progress: false
 
 jobs:
-  build-debug:
-    name: Build debug APK
+  build-release:
+    name: Build APK and publish release
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
-          java-version: "21"
+          distribution: temurin
+          java-version: '21'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -46,15 +46,61 @@ jobs:
         run: |
           "$ANDROID_SDK_ROOT"/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "cmake;3.22.1" >/dev/null 2>&1 || echo "sdkmanager install skipped; relying on AGP auto-download"
 
+      - name: Prepare signing keystore (signs the release APK)
+        run: |
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android -keypass android \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            TAG_NAME="${GITHUB_REF_NAME}"
+          else
+            VERSION_NAME="$(grep -oE 'versionName[[:space:]]*=[[:space:]]*"[^"]+"' app/build.gradle.kts | head -n 1 | cut -d'"' -f2)"
+            TAG_NAME="${INPUT_TAG_NAME:-v${VERSION_NAME}}"
+          fi
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Build debug and release APKs
+        run: ./gradlew :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Upload debug APK
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: RootMyGalaxy-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: RootMyGalaxy-apks
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Ensure release tag exists
+        run: |
+          set -euo pipefail
+          if ! git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
+            git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+            git push origin "refs/tags/$TAG_NAME"
+          fi
+        env:
+          TAG_NAME: ${{ steps.tag.outputs.tag_name }}
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          name: Release ${{ steps.tag.outputs.tag_name }}
+          files: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk
+          generate_release_notes: true

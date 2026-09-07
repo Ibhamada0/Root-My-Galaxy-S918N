@@ -255,6 +255,7 @@ private val languageOptions = listOf(
     LanguageOption(R.string.language_system, ""),
     LanguageOption(R.string.language_korean, "ko"),
     LanguageOption(R.string.language_english, "en"),
+    LanguageOption(R.string.language_german, "de"),
     LanguageOption(R.string.language_japanese, "ja"),
     LanguageOption(R.string.language_chinese, "zh-CN"),
     LanguageOption(R.string.language_chinese_traditional, "zh-TW"),
@@ -1618,7 +1619,7 @@ private fun SettingsPage(
             ThemeModeSelector(themeMode, onThemeModeChanged)
         }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 SettingsCard(
                     modifier = Modifier.onGloballyPositioned { coordinates ->
                         colorMenuTop = with(density) { coordinates.positionInWindow().y.toDp() }
@@ -1676,32 +1677,34 @@ private fun SettingsPage(
         }
         item { SectionLabel(stringResource(R.string.advanced)) }
         item {
-            SettingsSwitchCard(
-                icon = Icons.Rounded.Memory,
-                title = stringResource(R.string.advanced_mode),
-                description = stringResource(R.string.advanced_mode_description),
-                checked = advancedMode,
-                onCheckedChange = {
-                    clickHaptic(view)
-                    onAdvancedModeChanged(it)
-                },
-            )
-        }
-        item {
-            SettingsSwitchCard(
-                icon = Icons.Rounded.Memory,
-                title = stringResource(R.string.optimize_on_exploit),
-                description = stringResource(R.string.optimize_on_exploit_description),
-                checked = optimizeOnExploit,
-                onCheckedChange = {
-                    clickHaptic(view)
-                    onOptimizeOnExploitChanged(it)
-                },
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                SettingsSwitchCard(
+                    icon = Icons.Rounded.Memory,
+                    title = stringResource(R.string.advanced_mode),
+                    description = stringResource(R.string.advanced_mode_description),
+                    checked = advancedMode,
+                    position = SettingsCardPosition.Top,
+                    onCheckedChange = {
+                        clickHaptic(view)
+                        onAdvancedModeChanged(it)
+                    },
+                )
+                SettingsSwitchCard(
+                    icon = Icons.Rounded.Memory,
+                    title = stringResource(R.string.optimize_on_exploit),
+                    description = stringResource(R.string.optimize_on_exploit_description),
+                    checked = optimizeOnExploit,
+                    position = SettingsCardPosition.Bottom,
+                    onCheckedChange = {
+                        clickHaptic(view)
+                        onOptimizeOnExploitChanged(it)
+                    },
+                )
+            }
         }
         item { SectionLabel(stringResource(R.string.about)) }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 UpdateSettingsCard(
                     status = updateStatus,
                     position = SettingsCardPosition.Top,
@@ -1713,34 +1716,37 @@ private fun SettingsPage(
                     title = stringResource(R.string.about),
                     description = stringResource(R.string.about_description),
                     value = "",
-                    position = SettingsCardPosition.Bottom,
+                    position = SettingsCardPosition.Middle,
                     onClick = {
                         clickHaptic(view)
                         showAboutDialog = true
                     },
                 )
+                SettingsSwitchCard(
+                    icon = Icons.Rounded.PlayArrow,
+                    title = stringResource(R.string.settings_auto_start_shizuku),
+                    description = stringResource(R.string.settings_auto_start_shizuku_desc),
+                    checked = autoStartShizuku,
+                    position = SettingsCardPosition.Middle,
+                    onCheckedChange = {
+                        autoStartShizuku = it
+                        AppPreferences.setAutoStartShizuku(settingsContext, it)
+                    },
+                )
+                SettingsSwitchCard(
+                    icon = Icons.Rounded.Refresh,
+                    title = stringResource(R.string.settings_auto_root_boot),
+                    description = stringResource(R.string.settings_auto_root_boot_desc),
+                    checked = autoRootOnBoot,
+                    position = SettingsCardPosition.Bottom,
+                    onCheckedChange = {
+                        autoRootOnBoot = it
+                        AppPreferences.setAutoRootOnBoot(settingsContext, it)
+                    },
+                )
             }
 
-            SettingsSwitchCard(
-                icon = Icons.Rounded.PlayArrow,
-                title = stringResource(R.string.settings_auto_start_shizuku),
-                description = stringResource(R.string.settings_auto_start_shizuku_desc),
-                checked = autoStartShizuku,
-                onCheckedChange = {
-                    autoStartShizuku = it
-                    AppPreferences.setAutoStartShizuku(settingsContext, it)
-                },
-            )
-            SettingsSwitchCard(
-                icon = Icons.Rounded.Refresh,
-                title = stringResource(R.string.settings_auto_root_boot),
-                description = stringResource(R.string.settings_auto_root_boot_desc),
-                checked = autoRootOnBoot,
-                onCheckedChange = {
-                    autoRootOnBoot = it
-                    AppPreferences.setAutoRootOnBoot(settingsContext, it)
-                },
-            )
+            Spacer(modifier = Modifier.height(14.dp))
 
             Card(
                 modifier = Modifier.fillMaxWidth(),

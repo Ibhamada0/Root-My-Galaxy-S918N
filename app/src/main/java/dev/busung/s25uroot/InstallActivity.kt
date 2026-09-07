@@ -2,7 +2,6 @@ package dev.busung.s25uroot
 
 import android.os.Build
 import android.os.Bundle
-import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.WindowManager
@@ -48,7 +47,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -219,23 +217,6 @@ private fun InstallScreen(
 
 @Composable
 private fun InstallerStatusCard(installState: InstallUiState) {
-    val context = LocalContext.current
-    var rootDurationMillis by remember { mutableStateOf(AppPreferences.lastRootDurationMillis(context)) }
-    var cycleProgress by remember {
-        mutableFloatStateOf(bootWindowProgress(SystemClock.elapsedRealtime(), rootDurationMillis))
-    }
-    LaunchedEffect(installState.phase) {
-        while (installState.busy) {
-            rootDurationMillis = AppPreferences.lastRootDurationMillis(context)
-            cycleProgress = bootWindowProgress(SystemClock.elapsedRealtime(), rootDurationMillis)
-            delay(250)
-        }
-    }
-    val progress = when (installState.phase) {
-        InstallPhase.Installed -> 1f
-        else -> cycleProgress
-    }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -291,7 +272,7 @@ private fun InstallerStatusCard(installState: InstallUiState) {
                 }
             }
             LinearProgressIndicator(
-                progress = { progress },
+                progress = { installProgress(installState.phase) },
                 modifier = Modifier.fillMaxWidth(),
                 color = LocalContentColor.current,
                 trackColor = LocalContentColor.current.copy(alpha = 0.2f),
@@ -410,9 +391,14 @@ private fun installPhaseDetail(phase: InstallPhase): String = stringResource(
     },
 )
 
-internal fun bootWindowProgress(uptimeMillis: Long, windowMillis: Long): Float {
-    val safeWindowMillis = windowMillis.coerceAtLeast(1L)
-    return (uptimeMillis.coerceAtLeast(0L) % safeWindowMillis).toFloat() / safeWindowMillis
+private fun installProgress(phase: InstallPhase): Float = when (phase) {
+    InstallPhase.Checking -> 0.1f
+    InstallPhase.Ready -> 0f
+    InstallPhase.Downloading -> 0.3f
+    InstallPhase.Exploiting -> 0.6f
+    InstallPhase.LoadingKernelSu -> 0.85f
+    InstallPhase.Installed -> 1f
+    InstallPhase.Failed -> 0f
 }
 
 private fun stepState(phase: InstallPhase, stepIndex: Int): Int {
