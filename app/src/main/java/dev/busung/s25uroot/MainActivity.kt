@@ -291,44 +291,43 @@ private fun openKernelSuManager(context: Context, variant: KsuVariant) {
         context.assets.open("managers/kernelsu-manager.apk").use { input ->
             apk.outputStream().use { output -> input.copyTo(output) }
         }
-        var silentInstalled = false
-        if (ShizukuController.isRunning() && ShizukuController.isGranted()) {
-            val remotePath = "/data/local/tmp/ksu-manager-install.apk"
-            ShizukuController.exec(arrayOf("rm", "-f", remotePath)).waitFor()
-            ShizukuController.writeFile(remotePath, "644", apk.inputStream())
-            val result = ShizukuController.capture(
-                arrayOf("sh", "-c", "pm install -r '$remotePath'; rm -f '$remotePath'"),
-            )
-            silentInstalled = result.contains("Success", ignoreCase = true)
-        }
-        if (silentInstalled) {
-            context.packageManager.getLaunchIntentForPackage(pkg)?.let { context.startActivity(it) }
-        } else {
-            val uri = androidx.core.content.FileProvider.getUriForFile(
-                context, "${context.packageName}.fileprovider", apk,
-            )
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "application/vnd.android.package-archive")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                },
-            )
-        }
+        // Always hand the APK to the device's system package installer (visible UI),
+        // never a silent `pm install` shell command.
+        launchSystemInstaller(context, apk, pkg)
     } catch (error: Throwable) {
-        // No browser fallback: surface the error via the system installer on the bundled APK.
+        // Surface the error by trying to launch the system installer again on the
+        // already-written bundled APK.
         val apk = managerCacheFile(context, variant)
-        if (apk.exists()) {
-            val uri = androidx.core.content.FileProvider.getUriForFile(
-                context, "${context.packageName}.fileprovider", apk,
-            )
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "application/vnd.android.package-archive")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                },
-            )
-        }
+        if (apk.exists()) launchSystemInstaller(context, apk, pkg)
     }
+}
+
+/**
+ * Hand the APK to the system package installer. If "Install unknown apps" for
+ * this package isn't allowed yet (API 26+), route the user to the system
+ * permission screen; once they grant it, they can retry the install.
+ */
+private fun launchSystemInstaller(context: Context, apk: java.io.File, pkgToLaunchOnSuccess: String) {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+        !context.packageManager.canRequestPackageInstalls()
+    ) {
+        val settingsIntent = Intent(
+            android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            android.net.Uri.parse("package:${context.packageName}"),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(settingsIntent)
+        return
+    }
+    val uri = androidx.core.content.FileProvider.getUriForFile(
+        context, "${context.packageName}.fileprovider", apk,
+    )
+    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Some OEM installer chooser dialogs require this to filter for the package archiver.
+        putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+    }
+    context.startActivity(viewIntent)
 }
 
 private fun kernelSuManagerPackage(variant: KsuVariant): String =
