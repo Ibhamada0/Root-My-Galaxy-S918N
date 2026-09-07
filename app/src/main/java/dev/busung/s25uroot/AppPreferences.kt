@@ -113,7 +113,7 @@ object AppPreferences {
     }
 
     fun ksuVariant(context: Context): KsuVariant =
-        KsuVariant.fromStoredValue(prefs(context).getString(KSU_VARIANT, null))
+        KsuVariant.Regular
 
     @Deprecated("ksuVariantLegacy kept for migration only", level = DeprecationLevel.HIDDEN)
     fun ksuVariantLegacy(context: Context): KsuVariant =

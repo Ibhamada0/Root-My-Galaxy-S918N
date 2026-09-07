@@ -398,11 +398,7 @@ setPhase(
     private fun installKernelSu(payloads: VerifiedPayloads) {
         if (shizukuEnabled()) {
             // v0.2.26+: helper 硬编码 ksud 路径 /data/local/tmp/ksud-selected（F7310 版 helper）
-            // v0.3.11: stage under ALL loader names the helpers may look up, exactly like the
-            // non-Shizuku path, so late-load bind-mount never fails with ENOENT.
             shizukuStage(payloads.kernelSu, "/data/local/tmp/ksud-selected", "755")
-            shizukuStage(payloads.kernelSu, "/data/local/tmp/ksud-s25u-kdp", "755")
-            shizukuStage(payloads.kernelSu, "/data/local/tmp/ksud-f731u-kdp", "755")
             shizukuStage(payloads.kernelSu, SHIZUKU_KSUD_STAGE_PATH, "755")
             appendLog(app.getString(R.string.log_ksu_staged))
         } else {
@@ -503,14 +499,7 @@ setPhase(
         }
 
     private fun nativeHelperFile(): File =
-        File(
-            app.applicationInfo.nativeLibraryDir,
-            if (AppPreferences.ksuVariant(app) == KsuVariant.Next) {
-                "libcve43499root_next.so"
-            } else {
-                "libcve43499root.so"
-            },
-        )
+        File(app.applicationInfo.nativeLibraryDir, "libcve43499root.so")
 
     private fun shizukuEnabled(): Boolean = AppPreferences.shizukuMode(app)
 
