@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.rootmygalaxy.s23ultra"
         minSdk = 33
         targetSdk = 36
-        versionCode = 31
-        versionName = "0.3.0"
+        versionCode = 32
+        versionName = "0.3.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
@@ -47,6 +47,25 @@ android {
         jniLibs.useLegacyPackaging = true
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+        signingConfigs {
+            create("release") {
+                storeFile = java.io.File(System.getenv("HOME"), ".android/debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+
+        buildTypes {
+            release {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+
+        lint {
+            checkReleaseBuilds = false
+        }
+
 }
 
 kotlin {
