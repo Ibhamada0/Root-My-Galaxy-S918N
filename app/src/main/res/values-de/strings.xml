@@ -134,6 +134,7 @@
     <string name="github_card_description">Quellcode und Nutzungshinweise ansehen.</string>
     <string name="action_continue">Trotzdem fortfahren</string>
     <string name="action_next">Weiter</string>
+    <string name="advanced_kernel">Kernel-Engine</string>
     <string name="advanced">Erweitert</string>
     <string name="advanced_mode">Erweiterter Modus</string>
     <string name="advanced_mode_description">Während der Installation manuell eine gerätekompatible Payload auswählen</string>

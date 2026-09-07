@@ -140,6 +140,7 @@
     <string name="action_continue">Continue anyway</string>
     <string name="action_next">Next</string>
     <string name="advanced">Advanced</string>
+    <string name="advanced_kernel">Kernel engine</string>
     <string name="advanced_mode">Advanced mode</string>
     <string name="advanced_mode_description">Manually choose a device-compatible payload during installation</string>
     <string name="optimize_on_exploit">Run optimizations</string>

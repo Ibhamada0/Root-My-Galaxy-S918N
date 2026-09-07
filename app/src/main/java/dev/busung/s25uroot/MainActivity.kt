@@ -111,6 +111,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -1703,6 +1706,17 @@ private fun SettingsPage(
                 )
             }
         }
+        item { SectionLabel(stringResource(R.string.advanced_kernel)) }
+        item {
+            KsuVariantSettingsCard(
+                current = ksuVariant,
+                position = SettingsCardPosition.Single,
+                onKsuVariantChanged = { variant ->
+                    clickHaptic(view)
+                    onKsuVariantChanged(variant)
+                },
+            )
+        }
         item { SectionLabel(stringResource(R.string.about)) }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -2046,6 +2060,64 @@ private fun SectionLabel(text: String) {
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 18.dp, top = 6.dp, bottom = 2.dp),
     )
+}
+
+@Composable
+private fun KsuVariantSettingsCard(
+    current: KsuVariant,
+    position: SettingsCardPosition,
+    onKsuVariantChanged: (KsuVariant) -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = expressiveClickableCardShape(interactionSource, position),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Icon(Icons.Rounded.Memory, contentDescription = null)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.ksu_variant),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        stringResource(R.string.ksu_variant_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                KsuVariant.entries.forEachIndexed { index, variant ->
+                    SegmentedButton(
+                        selected = variant == current,
+                        onClick = { onKsuVariantChanged(variant) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = KsuVariant.entries.size,
+                        ),
+                    ) {
+                        Text(
+                            stringResource(variant.labelResIdRes),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 private enum class SettingsCardPosition {
