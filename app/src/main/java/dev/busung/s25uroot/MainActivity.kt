@@ -279,10 +279,11 @@ private const val SHIZUKU_MANAGER_URL = "https://github.com/thedjchi/Shizuku/rel
 private fun isKernelSuManagerInstalled(context: Context, variant: KsuVariant): Boolean =
     context.packageManager.getLaunchIntentForPackage(kernelSuManagerPackage(variant)) != null
 
-private fun managerAssetName(variant: KsuVariant): String = when (variant) {
-    KsuVariant.Next -> "managers/ksunext-manager.apk"
-    KsuVariant.Regular -> "managers/kernelsu-manager.apk"
-}
+// v0.3.13: the shipped daemon for BOTH engine variants is the standard
+// KernelSU daemon (ksud-f731u-kdp, generic android13-5.15 KMI). The
+// KernelSU-Next manager (com.rifsxd.ksunext) cannot connect to it, so the
+// running daemon is always paired with the regular KernelSU manager.
+private fun managerAssetName(variant: KsuVariant): String = "managers/kernelsu-manager.apk"
 
 private fun managerCacheFile(context: Context, variant: KsuVariant): java.io.File =
     java.io.File(context.cacheDir, managerAssetName(variant).substringAfterLast('/'))
@@ -336,10 +337,7 @@ private fun launchSystemInstaller(context: Context, apk: java.io.File, pkgToLaun
     context.startActivity(viewIntent)
 }
 
-private fun kernelSuManagerPackage(variant: KsuVariant): String = when (variant) {
-    KsuVariant.Next -> KERNEL_SU_MANAGER_PACKAGE
-    KsuVariant.Regular -> KERNEL_SU_MANAGER_PACKAGE_REGULAR
-}
+private fun kernelSuManagerPackage(variant: KsuVariant): String = KERNEL_SU_MANAGER_PACKAGE_REGULAR
 
 private fun kernelSuManagerUrl(variant: KsuVariant): String = when (variant) {
     KsuVariant.Next -> KERNEL_SU_MANAGER_URL

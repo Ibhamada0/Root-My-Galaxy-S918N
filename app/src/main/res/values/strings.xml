@@ -12,9 +12,9 @@
     <string name="action_retry">Try again</string>
     <string name="action_done">Done</string>
     <string name="action_back">Back</string>
-    <string name="install_tap_manager">Tap to install KernelSU Next Manager</string>
+    <string name="install_tap_manager">Tap to install KernelSU Manager</string>
     <string name="install_tap_manager_regular">Tap to install KernelSU Manager</string>
-    <string name="install_tap_open_manager">Tap to open KernelSU Next Manager</string>
+    <string name="install_tap_open_manager">Tap to open KernelSU Manager</string>
     <string name="install_tap_open_manager_regular">Tap to open KernelSU Manager</string>
     <string name="install_tap_retry">Tap to try again</string>
     <string name="install_tap_start">Tap to install KernelSU</string>
