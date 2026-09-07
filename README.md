@@ -14,6 +14,93 @@ project, adapted from `SM-S918B` to `SM-S918N`. See
 
 Use this only on devices you own or are explicitly authorized to test.
 
+## Download & Install (from GitHub Releases)
+
+The simplest way to get the app is to download the latest release and
+sideload it onto the device. No store, no Play account, no shell.
+
+**Latest stable release:** [v0.3.5](https://github.com/Ibhamada0/Root-My-Galaxy-S918N/releases/tag/v0.3.5)
+([all releases](https://github.com/Ibhamada0/Root-My-Galaxy-S918N/releases))
+
+| Asset              | Size                       | Use it for                                                                                                     |
+| ------------------ | -------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `app-release.apk`  | ~71.3 MB (74,722,550 B)    | **Normal users.** Signed by the same release key used since v0.3.4, so it can be installed over an existing build. |
+| `app-debug.apk`    | ~88.0 MB (92,286,988 B)    | Developers only. Signed with the default debug key inside the CI runner, so its certificate can change between CI runs. |
+
+Direct download links for v0.3.5:
+
+- https://github.com/Ibhamada0/Root-My-Galaxy-S918N/releases/download/v0.3.5/app-release.apk
+- https://github.com/Ibhamada0/Root-My-Galaxy-S918N/releases/download/v0.3.5/app-debug.apk
+
+### Signing identity (verifies the file really came from this repo)
+
+All `app-release.apk` builds since v0.3.4 are signed with the same release
+key committed in `app/signing/release.jks`. The certificate's SHA-256
+fingerprint is:
+
+```
+ee190f56b3c6c4550befa5a457b9a4a6adc6486bb2eaea900a2bcf65c58c8bc5
+```
+
+You can verify it yourself after downloading:
+
+```sh
+# macOS / Linux, requires Android build-tools (apksigner)
+apksigner verify --print-certs app-release.apk \
+  | grep "Signer #1 certificate SHA-256 digest"
+# expected output:
+# ee190f56b3c6c4550befa5a457b9a4a6adc6486bb2eaea900a2bcf65c58c8bc5
+```
+
+If the digest does **not** match, do not install the file — you have a
+different (possibly tampered) build.
+
+### Step 1 — allow this app to install other apps
+
+The first time you run the app it must be granted the
+"Install unknown apps" permission, because both Shizuku and the bundled
+KernelSU Manager are installed through the system package installer, not
+via a silent shell command.
+
+1. On the device: **Settings → Apps → Special access → Install unknown apps**.
+2. Pick **Root My Galaxy** and toggle **Allow**.
+3. Repeat for **Shizuku** if you plan to use it.
+
+On Android 14+ the path is:
+**Settings → Apps → Root My Galaxy → Install unknown apps**.
+
+### Step 2 — pick one installation method
+
+All three methods write the same `app-release.apk`, so the certificate
+check above applies whichever path you choose.
+
+**A. Sideload from the device browser (no PC needed).**
+
+1. Open `https://github.com/Ibhamada0/Root-My-Galaxy-S918N/releases/latest`
+   in the phone's browser.
+2. Tap `app-release.apk` and confirm the download.
+3. Tap the downloaded file from the notification shade (or open
+   `Files → Downloads`) and let the system's package installer handle it.
+
+**B. From a PC over ADB (recommended for developers).**
+
+```sh
+adb install -r app-release.apk
+# expected last line: Success
+```
+
+`-r` reinstalls over the previous build, which works as long as the
+signing certificate is the same — and it is, for every `app-release.apk`
+from v0.3.4 onward.
+
+**C. From the app's built-in updater.**
+
+Once a previous build is installed, **Settings → "Check for update"**
+pulls the latest release from
+`https://api.github.com/repos/Ibhamada0/Root-My-Galaxy-S918N/releases/latest`
+and hands the APK to the system installer. This is the only path that
+uses no `pm install` shell command and no browser fallback.
+
 # Root My Galaxy for SM-S918N is here
 
 ## Port Overview
@@ -113,6 +200,33 @@ Recommended test sequence:
 3. Run the installation and let all 24 exploit attempts finish.
 4. On success the app installs/opens the bundled KernelSU manager.
 5. If it fails, export the full log from the History tab and share it.
+
+## Updating from a Previous Version
+
+If you already have a previous `v0.3.x` build installed, you can update to
+the latest release **without uninstalling first**. The release key has
+been fixed since `v0.3.4`, so the certificate matches and Android treats
+the new APK as a normal upgrade.
+
+Three update paths, all valid:
+
+1. **In-app updater (preferred).** Settings → "Check for update". The
+   app downloads `app-release.apk` from `/repos/Ibhamada0/Root-My-Galaxy-S918N/releases/latest`
+   and hands it to the system installer.
+2. **ADB update.** `adb install -r app-release.apk`. No
+   `INSTALL_FAILED_UPDATE_INCOMPATIBLE` as long as the certificate
+   matches (verified by the SHA-256 fingerprint in the section above).
+3. **Sideload.** Download `app-release.apk` over the device browser and
+   tap the file; the system installer detects that it is an upgrade.
+
+> **Heads-up for `v0.3.1`, `v0.3.2`, `v0.3.3`.** Those three builds were
+> signed with a throwaway keystore generated inside the CI runner for
+> each build, so their certificate differs from `v0.3.4`'s and from
+> every build after it. If you carry one of them on your phone,
+> `adb install -r` will fail with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`.
+> The fix is a one-time cleanup: uninstall the old build, then install
+> `v0.3.5` (or any later `app-release.apk`) fresh. Every subsequent
+> update will land cleanly over the previous one.
 
 ## Important Files
 
