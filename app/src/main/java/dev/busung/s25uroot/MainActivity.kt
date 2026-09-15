@@ -1506,7 +1506,6 @@ private fun saveRunLog(context: Context, uri: Uri, entry: InstallHistoryEntry) {
     ).show()
 }
 
-@Composable
 private const val CSC_PRECONFIG_COMMAND =
     "/system/bin/am start -n com.samsung.android.cidmanager/.modules.preconfig.PreconfigActivity " +
         "-a com.samsung.android.action.SECRET_CODE -d secret_code://27262826 --ei type 2"
@@ -1524,6 +1523,7 @@ private fun runCscPreconfig(): Pair<Int, String> = runCatching {
     process.waitFor() to output
 }.getOrElse { -1 to (it.message ?: it.toString()) }
 
+@Composable
 private fun SettingsPage(
     padding: PaddingValues,
     accentColor: AccentColor,
