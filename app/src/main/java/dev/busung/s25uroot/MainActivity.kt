@@ -1510,18 +1510,60 @@ private const val CSC_PRECONFIG_COMMAND =
     "/system/bin/am start -n com.samsung.android.cidmanager/.modules.preconfig.PreconfigActivity " +
         "-a com.samsung.android.action.SECRET_CODE -d secret_code://27262826 --ei type 2"
 
+/** Absolute `su` locations used by Magisk / KernelSU / SuperSU on Samsung firmware.
+ *  A bare "su" is last because a relative name is not resolvable from an app process
+ *  (that was the cause of "Cannot run program \"su\": error=2, No such file or directory"). */
+private val SU_BINARIES = listOf(
+    "/system/bin/su",
+    "/system/xbin/su",
+    "/sbin/su",
+    "/su/bin/su",
+    "/debug_ramdisk/su",
+    "su",
+)
+
+private const val CSC_PRECONFIG_COMMAND =
+    "/system/bin/am start -n com.samsung.android.cidmanager/.modules.preconfig.PreconfigActivity " +
+        "-a com.samsung.android.action.SECRET_CODE -d secret_code://27262826 --ei type 2"
+
 /**
- * Launches Samsung's hidden Preconfig (CSC / region switcher) through a root shell,
- * using `su -c "<cmd>"` exactly like the Termux invocation.
- * Never throws: returns Pair(exitCode, combinedOutput); exitCode == -1 means `su` could not start.
+ * Launches Samsung's hidden Preconfig (CSC / region switcher).
+ *
+ * Method 1: root shell — identical to the Termux invocation `su -c "<cmd>"`, but every
+ *           well-known absolute `su` path is tried before falling back to PATH lookup.
+ * Method 2: Shizuku (runs as the shell UID, which is already allowed to run `am start`).
+ *
+ * Never throws: returns Pair(exitCode, combinedOutput); exitCode == -1 means no shell started.
  */
-private fun runCscPreconfig(): Pair<Int, String> = runCatching {
-    val process = ProcessBuilder("su", "-c", CSC_PRECONFIG_COMMAND)
-        .redirectErrorStream(true)
-        .start()
-    val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
-    process.waitFor() to output
-}.getOrElse { -1 to (it.message ?: it.toString()) }
+private fun runCscPreconfig(): Pair<Int, String> {
+    val attempted = StringBuilder()
+    for (su in SU_BINARIES) {
+        try {
+            val process = ProcessBuilder(su, "-c", CSC_PRECONFIG_COMMAND)
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+            val exit = process.waitFor()
+            return exit to ("[via $su] " + output)
+        } catch (io: java.io.IOException) {
+            attempted.append("$su: ${io.message}; ")
+        } catch (t: Throwable) {
+            attempted.append("$su: ${t.message}; ")
+        }
+    }
+    try {
+        if (ShizukuController.isRunning() && ShizukuController.isGranted()) {
+            val process = ShizukuController.exec(arrayOf("sh", "-c", CSC_PRECONFIG_COMMAND))
+            val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+            val exit = process.waitFor()
+            return exit to ("[via Shizuku] " + output)
+        }
+        attempted.append("Shizuku: not running or not granted; ")
+    } catch (t: Throwable) {
+        attempted.append("Shizuku: ${t.message}; ")
+    }
+    return -1 to attempted.toString().trim()
+}
 
 @Composable
 private fun SettingsPage(
