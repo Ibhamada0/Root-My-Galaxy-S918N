@@ -1506,10 +1506,6 @@ private fun saveRunLog(context: Context, uri: Uri, entry: InstallHistoryEntry) {
     ).show()
 }
 
-private const val CSC_PRECONFIG_COMMAND =
-    "/system/bin/am start -n com.samsung.android.cidmanager/.modules.preconfig.PreconfigActivity " +
-        "-a com.samsung.android.action.SECRET_CODE -d secret_code://27262826 --ei type 2"
-
 /** Absolute `su` locations used by Magisk / KernelSU / SuperSU on Samsung firmware.
  *  A bare "su" is last because a relative name is not resolvable from an app process
  *  (that was the cause of "Cannot run program \"su\": error=2, No such file or directory"). */

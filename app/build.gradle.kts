@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.rootmygalaxy.s23ultra"
         minSdk = 33
         targetSdk = 36
-        versionCode = 48
-        versionName = "0.3.17"
+        versionCode = 49
+        versionName = "0.3.18"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
