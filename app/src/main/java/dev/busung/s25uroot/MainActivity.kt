@@ -154,8 +154,10 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.busung.s25uroot.ui.theme.RootMyGalaxyTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -1505,6 +1507,23 @@ private fun saveRunLog(context: Context, uri: Uri, entry: InstallHistoryEntry) {
 }
 
 @Composable
+private const val CSC_PRECONFIG_COMMAND =
+    "/system/bin/am start -n com.samsung.android.cidmanager/.modules.preconfig.PreconfigActivity " +
+        "-a com.samsung.android.action.SECRET_CODE -d secret_code://27262826 --ei type 2"
+
+/**
+ * Launches Samsung's hidden Preconfig (CSC / region switcher) through a root shell,
+ * using `su -c "<cmd>"` exactly like the Termux invocation.
+ * Never throws: returns Pair(exitCode, combinedOutput); exitCode == -1 means `su` could not start.
+ */
+private fun runCscPreconfig(): Pair<Int, String> = runCatching {
+    val process = ProcessBuilder("su", "-c", CSC_PRECONFIG_COMMAND)
+        .redirectErrorStream(true)
+        .start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+    process.waitFor() to output
+}.getOrElse { -1 to (it.message ?: it.toString()) }
+
 private fun SettingsPage(
     padding: PaddingValues,
     accentColor: AccentColor,
@@ -1695,10 +1714,35 @@ private fun SettingsPage(
                     title = stringResource(R.string.optimize_on_exploit),
                     description = stringResource(R.string.optimize_on_exploit_description),
                     checked = optimizeOnExploit,
-                    position = SettingsCardPosition.Bottom,
+                    position = SettingsCardPosition.Middle,
                     onCheckedChange = {
                         clickHaptic(view)
                         onOptimizeOnExploitChanged(it)
+                    },
+                )
+                SettingsCard(
+                    icon = Icons.Rounded.Settings,
+                    title = stringResource(R.string.csc_preconfig),
+                    description = stringResource(R.string.csc_preconfig_description),
+                    value = "",
+                    position = SettingsCardPosition.Bottom,
+                    onClick = {
+                        clickHaptic(view)
+                        scope.launch {
+                            val (exitCode, output) = withContext(Dispatchers.IO) { runCscPreconfig() }
+                            val launched = exitCode == 0 &&
+                                !output.contains("Error", ignoreCase = true) &&
+                                !output.contains("Exception", ignoreCase = true)
+                            val message = if (launched) {
+                                context.getString(R.string.csc_preconfig_launched)
+                            } else {
+                                context.getString(
+                                    R.string.csc_preconfig_failed,
+                                    output.ifBlank { "exit=$exitCode" }.take(160),
+                                )
+                            }
+                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                        }
                     },
                 )
             }
