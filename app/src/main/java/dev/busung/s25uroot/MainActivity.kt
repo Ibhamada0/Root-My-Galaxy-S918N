@@ -1506,33 +1506,77 @@ private fun saveRunLog(context: Context, uri: Uri, entry: InstallHistoryEntry) {
     ).show()
 }
 
-/** Absolute `su` locations used by Magisk / KernelSU / SuperSU on Samsung firmware.
- *  A bare "su" is last because a relative name is not resolvable from an app process
- *  (that was the cause of "Cannot run program \"su\": error=2, No such file or directory"). */
+/** كل المسارات المعروفة لثنائي su بحسب مدير الروت المستخدم على الجهاز. */
 private val SU_BINARIES = listOf(
-    "/system/bin/su",
-    "/system/xbin/su",
+    "/system/bin/su",              // Magisk / الأكثر شيوعًا
+    "/system/xbin/su",             // SuperSU / رومات قديمة
     "/sbin/su",
     "/su/bin/su",
-    "/debug_ramdisk/su",
-    "su",
+    "/debug_ramdisk/su",           // Magisk الحديث
+    "/data/adb/ksu/bin/su",        // KernelSU / KernelSU Next
+    "/data/adb/ap/bin/su",         // APatch
 )
 
 private const val CSC_PRECONFIG_COMMAND =
     "/system/bin/am start -n com.samsung.android.cidmanager/.modules.preconfig.PreconfigActivity " +
         "-a com.samsung.android.action.SECRET_CODE -d secret_code://27262826 --ei type 2"
 
+/** تغليف القيمة كوسيط shell آمن. */
+private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
 /**
- * Launches Samsung's hidden Preconfig (CSC / region switcher).
- *
- * Method 1: root shell — identical to the Termux invocation `su -c "<cmd>"`, but every
- *           well-known absolute `su` path is tried before falling back to PATH lookup.
- * Method 2: Shizuku (runs as the shell UID, which is already allowed to run `am start`).
- *
- * Never throws: returns Pair(exitCode, combinedOutput); exitCode == -1 means no shell started.
+ * يكتشف مدير الروت المثبّت على الجهاز (للعرض التشخيصي فقط).
+ * ملاحظة: AxManager ليس مدير رووت - هو طبقة ADB (مشتقة من Shizuku) ولا يمنح root.
  */
-private fun runCscPreconfig(): Pair<Int, String> {
+private fun detectRootBackend(context: Context): String {
+    val managers = listOf(
+        "/data/adb/ksu" to "KernelSU/Next",
+        "/data/adb/ap" to "APatch",
+        "/data/adb/magisk" to "Magisk",
+    ).filter { java.io.File(it.first).exists() }.map { it.second }
+
+    val adbLayers = try {
+        context.packageManager.getInstalledPackages(0)
+            .map { it.packageName }
+            .filter { it.contains("axmanager", true) || it.contains("axeron", true) }
+    } catch (_: Throwable) { emptyList() }
+
+    return buildString {
+        append(if (managers.isEmpty()) "root-manager?" else managers.joinToString("+"))
+        if (adbLayers.isNotEmpty()) append(" | ADB-layer: ${adbLayers.joinToString(",")}")
+    }
+}
+
+/**
+ * ينفّذ أمر Preconfig بصلاحيات الروت الحقيقية فقط (بدون Shizuku / ADB layer).
+ *
+ * الطريقة 1 (المطابقة تمامًا لما ينجح في Termux): تشغيل `/system/bin/sh -c "su -c '<cmd>'"`
+ *   بحيث يتم حلّ `su` داخل الـ shell نفسه حيث يكون PATH مكتملًا - وهذه هي النقطة التي
+ *   كان يفتقدها الحل السابق (تشغيل "su" مباشرة من عملية التطبيق يرمي
+ *   java.io.IOException: Cannot run program "su": error=2, No such file or directory).
+ * الطريقة 2: تجربة كل مسار مطلق معروف لثنائي su.
+ *
+ * لا يرمي استثناءً أبدًا: يُرجع Pair(exitCode, مخرجات) و exitCode == -1 يعني أن أي shell لم يبدأ.
+ */
+private fun runCscPreconfig(context: Context): Pair<Int, String> {
     val attempted = StringBuilder()
+    val backend = detectRootBackend(context)
+
+    // الطريقة 1: نفس صيغة Termux، عبر sh حتى يُحلّ su من PATH.
+    try {
+        val shellLine = "/system/bin/sh -c " + shellQuote("su -c " + shellQuote(CSC_PRECONFIG_COMMAND))
+        val process = ProcessBuilder("/system/bin/sh", "-c", shellLine)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+        val exit = process.waitFor()
+        if (exit == 0) return exit to "[sh+su | $backend] $output"
+        attempted.append("[sh+su] exit=$exit ${output.take(120)}; ")
+    } catch (t: Throwable) {
+        attempted.append("[sh+su] ${t.message}; ")
+    }
+
+    // الطريقة 2: كل مسار مطلق معروف.
     for (su in SU_BINARIES) {
         try {
             val process = ProcessBuilder(su, "-c", CSC_PRECONFIG_COMMAND)
@@ -1540,25 +1584,16 @@ private fun runCscPreconfig(): Pair<Int, String> {
                 .start()
             val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
             val exit = process.waitFor()
-            return exit to ("[via $su] " + output)
+            if (exit == 0) return exit to "[$su | $backend] $output"
+            attempted.append("$su: exit=$exit ${output.take(80)}; ")
         } catch (io: java.io.IOException) {
             attempted.append("$su: ${io.message}; ")
         } catch (t: Throwable) {
             attempted.append("$su: ${t.message}; ")
         }
     }
-    try {
-        if (ShizukuController.isRunning() && ShizukuController.isGranted()) {
-            val process = ShizukuController.exec(arrayOf("sh", "-c", CSC_PRECONFIG_COMMAND))
-            val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
-            val exit = process.waitFor()
-            return exit to ("[via Shizuku] " + output)
-        }
-        attempted.append("Shizuku: not running or not granted; ")
-    } catch (t: Throwable) {
-        attempted.append("Shizuku: ${t.message}; ")
-    }
-    return -1 to attempted.toString().trim()
+
+    return -1 to "[backend=$backend] ${attempted.toString().trim()}"
 }
 
 @Composable
@@ -1767,7 +1802,7 @@ private fun SettingsPage(
                     onClick = {
                         clickHaptic(view)
                         scope.launch {
-                            val (exitCode, output) = withContext(Dispatchers.IO) { runCscPreconfig() }
+                            val (exitCode, output) = withContext(Dispatchers.IO) { runCscPreconfig(context) }
                             val launched = exitCode == 0 &&
                                 !output.contains("Error", ignoreCase = true) &&
                                 !output.contains("Exception", ignoreCase = true)
