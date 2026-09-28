@@ -251,6 +251,12 @@ setPhase(
     }
 
     private suspend fun executeExploit(payload: File) {
+        // BOPE-style stability gate: hold off until the kernel side is calm.
+        val readiness = StabilityLauncher.awaitReady()
+        appendLog(
+            "[*] stability gate: ready=${readiness.ready} lane=${readiness.lane} " +
+                "samples=${readiness.samples} state=${readiness.last?.reason ?: "n/a"}",
+        )
         val shizuku = shizukuEnabled()
         appendLog("[diag] shizukuEnabled=$shizuku isRunning=${ShizukuController.isRunning()} isGranted=${ShizukuController.isGranted()}")
         // v0.2.34: pstore dump —— 重启后读上次内核崩溃日志（KDP/DEFEX/RKP 拦截铁证）
