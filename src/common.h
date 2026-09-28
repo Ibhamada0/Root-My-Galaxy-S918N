@@ -322,6 +322,7 @@ extern uintptr_t slide_p0_offset;
 extern uintptr_t slide_oracle_parent;
 extern uintptr_t slide_oracle_target;
 extern uintptr_t p0_gate_page_struct;
+extern int p0_gate_quarantined;
 extern uintptr_t p0_probe_page_struct;
 extern uintptr_t fops_data_probe_addr;
 extern int fops_data_probe_active;

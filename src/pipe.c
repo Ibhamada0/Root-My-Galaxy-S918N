@@ -20,10 +20,15 @@ static int pipe_fds_reclaim[PIPE_RECLAIM][2];
 #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
 static int p0_gate_holders[PIPE_RECLAIM][2];
 static int p0_gate_holders_initialized;
+int p0_gate_quarantined;   /* after a successful session: never free gate pages */
 
 #if defined(APP_REQUIRE_FRESH_P0_SESSION) && APP_REQUIRE_FRESH_P0_SESSION
 static void close_p0_gate_holders(void) {
   if (!p0_gate_holders_initialized) {
+    return;
+  }
+  if (p0_gate_quarantined) {
+    pr_info("p0 gate holders quarantined - refusing close (leak by design)\n");
     return;
   }
   for (size_t i = 0; i < PIPE_RECLAIM; i++) {
