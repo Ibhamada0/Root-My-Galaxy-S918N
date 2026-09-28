@@ -216,3 +216,17 @@
 #define FOPS_SHOW_FDINFO_OFF 0xe0
 
 #endif
+/* ------------------------------------------------------------------
+ * v0.3.25 anti-reboot mitigation (ported from S711U/quarantine work).
+ * The p0-gate quarantine + quiet reclaim window were previously compiled
+ * OUT on S918N (only APP_PHYS_P0_ORACLE was defined), so freed gate
+ * pages polluted with fake rb/list pointers returned to the buddy
+ * freelist -> __list_del_entry_valid panic + reboot during
+ * prepare_kernel_page() reclaim stage.
+ * ------------------------------------------------------------------ */
+#ifndef APP_REQUIRE_FRESH_P0_SESSION
+#define APP_REQUIRE_FRESH_P0_SESSION 1
+#endif
+#ifndef APP_QUIET_RECLAIM_WINDOW
+#define APP_QUIET_RECLAIM_WINDOW 1
+#endif
