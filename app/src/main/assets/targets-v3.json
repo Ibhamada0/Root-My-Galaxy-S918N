@@ -12,7 +12,8 @@
       ],
       "exploit": {
         "url": "asset://cve-2026-43499-app.so",
-        "size": 131072
+        "size": 129472,
+        "md5": "9028798c23a9c892799c6b9bcd4ce5e7"
       },
       "kernelsu": {
         "url": "asset://ksud-f731u-kdp",
@@ -30,7 +31,8 @@
       ],
       "exploit": {
         "url": "asset://cve-2026-43499-app.so",
-        "size": 131072
+        "size": 129472,
+        "md5": "9028798c23a9c892799c6b9bcd4ce5e7"
       },
       "kernelsu": {
         "url": "asset://ksud-next",
