@@ -143,8 +143,9 @@ jobs:
       - name: Build isolated experimental APK when the full port passed
         run: |
           if [ -f online-out/apk-ready ]; then
-            cd online-upstream
-            bash ./gradlew :app:assembleDebug --no-daemon --stacktrace
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --list --channel=3 | grep 'platforms;android-' || true
+            cd online-upstream/app
+            bash ./gradlew assembleDebug --no-daemon --stacktrace
           else
             echo "Kernel analysis only: exact runtime fingerprint is still required." >> "$GITHUB_STEP_SUMMARY"
           fi
