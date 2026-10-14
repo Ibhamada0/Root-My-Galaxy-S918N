@@ -22,7 +22,8 @@ and decompressed SHA-256:
 1552a1dbf45a95ef25626097605c2f1d3e64c1b557353887b905be1ea166635e
 
 With no boot URL, only safeguard tests run. With a URL but no fingerprint,
-only kernel evidence is produced; the script does not guess the fingerprint.
+the kernel contract and KernelSU ABI are checked without compiling or executing
+a payload; the script does not guess the fingerprint.
 With both inputs, it derives and independently verifies the GZIF firmware
 contract, builds BOPE and its helpers, and audits KernelSU symbols, CRCs and
 layouts before rebuilding ksud and packaging an APK.
