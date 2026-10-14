@@ -154,9 +154,6 @@ def run_port(project: Path, inputs: dict, report_dir: Path) -> None:
     }
     evidence_path = report_dir / "gzif-report.json"
     evidence_path.write_text(json.dumps(evidence, indent=2) + "\n")
-    if not fingerprint:
-        print("Kernel evidence generated. Exact device fingerprint is needed to build the payload/APK.")
-        return
     contract = derive_contract(
         donor_header, target / "brazilian-open-payload-engine/src/target.h",
         target_name=SLUG, model="SM-S918N", device="dm3q", build=BUILD,
@@ -175,6 +172,12 @@ def run_port(project: Path, inputs: dict, report_dir: Path) -> None:
     evidence_path.write_text(json.dumps(evidence, indent=2) + "\n")
     if not verification["passed"]:
         raise RuntimeError("Generated GZIF contract failed independent verification")
+    if not fingerprint:
+        evidence["status"] = "CONTRACT_VERIFIED_RUNTIME_FINGERPRINT_REQUIRED"
+        evidence_path.write_text(json.dumps(evidence, indent=2) + "\n")
+        (target / "port-manifest.json").write_text(json.dumps(evidence, indent=2) + "\n")
+        print("GZIF contract verified. Exact device fingerprint is required before compilation.")
+        return
     _enforce_exact_runtime_identity(target / "brazilian-open-payload-engine")
     ndk = Path(os.environ["ANDROID_NDK_HOME"])
     artifacts = build_target(target, ndk=ndk, logs=logs)
