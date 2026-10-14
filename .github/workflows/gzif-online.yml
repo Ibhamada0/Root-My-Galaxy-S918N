@@ -1,0 +1,176 @@
+name: GZIF online port (experimental)
+
+on:
+  push:
+    branches: ['codex/s918n-gzif-online-port']
+    paths:
+      - '.github/workflows/gzif-online.yml'
+      - 'tools/gzif_online.py'
+      - 'tools/test_gzif_online.py'
+      - 'ci/gzif-input.json'
+  pull_request:
+    paths:
+      - '.github/workflows/gzif-online.yml'
+      - 'tools/gzif_online.py'
+      - 'tools/test_gzif_online.py'
+      - 'ci/gzif-input.json'
+  workflow_dispatch:
+    inputs:
+      boot_url:
+        description: 'Public GitHub release asset URL for the verified GZIF boot.img.lz4'
+        required: true
+        type: string
+      fingerprint:
+        description: 'Exact adb shell getprop ro.build.fingerprint (blank = kernel analysis only)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gzif-online-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      ready: ${{ steps.inputs.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test input and firmware safeguards
+        run: |
+          python3 -m py_compile tools/gzif_online.py
+          python3 -m unittest discover -s tools -p test_gzif_online.py -v
+      - name: Resolve firmware inputs
+        id: inputs
+        env:
+          INPUT_BOOT_URL: ${{ inputs.boot_url }}
+          INPUT_FINGERPRINT: ${{ inputs.fingerprint }}
+        run: python3 tools/gzif_online.py --resolve-inputs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gzif-build-inputs
+          path: online-out/inputs.json
+          retention-days: 7
+      - name: Explain missing input
+        if: steps.inputs.outputs.ready != 'true'
+        run: |
+          echo '## GZIF port is waiting for firmware' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Input validation passed. Add the public download URL of the verified boot.img.lz4 to ci/gzif-input.json on this branch. No payload or APK was built.' >> "$GITHUB_STEP_SUMMARY"
+
+  port:
+    needs: validate
+    if: needs.validate.outputs.ready == 'true' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: gzif-build-inputs
+          path: online-out
+      - name: Select analysis or full build
+        id: mode
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          fingerprint = json.loads(Path("online-out/inputs.json").read_text())["fingerprint"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("full=" + str(bool(fingerprint)).lower() + "\n")
+          PY
+      - name: Checkout reviewed BOPE source
+        uses: actions/checkout@v4
+        with:
+          repository: soumarcelino/Root-My-Galaxy-SM-S918B
+          ref: 362416498212658e17f72f05e64259b85998d75b
+          path: online-upstream
+          persist-credentials: false
+      - name: Checkout KernelSU Next v3.4.0 source
+        if: steps.mode.outputs.full == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: KernelSU-Next/KernelSU-Next
+          ref: 1a879d6a866f80b1fa1c1009a2ffa747873cbb5e
+          path: online-ksu
+          persist-credentials: false
+      - name: Checkout kernel extraction tools
+        uses: actions/checkout@v4
+        with:
+          repository: marin-m/vmlinux-to-elf
+          ref: 19683fb95b29cd31362d49e6f48ab8368f96cbdf
+          path: online-kernel-tools
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        if: steps.mode.outputs.full == 'true'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.mode.outputs.full == 'true'
+      - name: Install host and kernel analysis dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv dwarves llvm lz4 kmod clang make pkg-config libssl-dev
+          python3 -m venv .online-venv
+          .online-venv/bin/pip install ./online-kernel-tools pyelftools
+          echo "$GITHUB_WORKSPACE/.online-venv/bin" >> "$GITHUB_PATH"
+      - name: Prepare Android and Rust toolchains
+        if: steps.mode.outputs.full == 'true'
+        run: |
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "KSU_SOURCE=$GITHUB_WORKSPACE/online-ksu" >> "$GITHUB_ENV"
+          NDK_BIN="$ANDROID_SDK_ROOT/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "$NDK_BIN" >> "$GITHUB_PATH"
+          echo "CC_aarch64_linux_android=$NDK_BIN/aarch64-linux-android26-clang" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_linux_android=$NDK_BIN/aarch64-linux-android26-clang++" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$NDK_BIN/llvm-ar" >> "$GITHUB_ENV"
+          rustup target add aarch64-linux-android
+          git -C online-ksu apply --check ../online-upstream/targets/zzhl/kernelsu-next/patches/KernelSU-Next-v3.4.0-samsung-kdp-rkp-defex.patch
+          git -C online-ksu apply ../online-upstream/targets/zzhl/kernelsu-next/patches/KernelSU-Next-v3.4.0-samsung-kdp-rkp-defex.patch
+      - name: Analyze GZIF and build only after compatibility checks
+        run: |
+          set -o pipefail
+          python3 tools/gzif_online.py 2>&1 | tee online-out/port-console.log
+      - name: Build isolated experimental APK when the full port passed
+        run: |
+          if [ -f online-out/apk-ready ]; then
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --list --channel=3 | grep 'platforms;android-' || true
+            cd online-upstream/app
+            bash ./gradlew assembleDebug --no-daemon --stacktrace
+          else
+            echo "Kernel analysis only: exact runtime fingerprint is still required." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Package source, binaries and evidence
+        if: always()
+        run: |
+          if [ -d online-upstream/targets/s918ngzif-WIP ]; then
+            tar --exclude='*.img' --exclude='*.lz4' --exclude='*.elf' --exclude='*/unpacked' \
+              -czf online-out/gzif-experimental-target.tar.gz \
+              -C online-upstream targets/s918ngzif-WIP LICENSE
+          fi
+          if [ -f online-out/gzif-report.json ]; then
+            echo '## GZIF port report' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Static build results do not establish successful rooting. Device validation is pending.' >> "$GITHUB_STEP_SUMMARY"
+            echo '~~~json' >> "$GITHUB_STEP_SUMMARY"
+            cat online-out/gzif-report.json | tee -a "$GITHUB_STEP_SUMMARY"
+            echo '~~~' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload build results and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gzif-experimental-results
+          path: |
+            online-out/
+            online-upstream/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 14
