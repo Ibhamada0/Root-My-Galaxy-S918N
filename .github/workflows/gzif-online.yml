@@ -128,6 +128,11 @@ jobs:
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" "cmake;3.22.1"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
           echo "KSU_SOURCE=$GITHUB_WORKSPACE/online-ksu" >> "$GITHUB_ENV"
+          NDK_BIN="$ANDROID_SDK_ROOT/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "$NDK_BIN" >> "$GITHUB_PATH"
+          echo "CC_aarch64_linux_android=$NDK_BIN/aarch64-linux-android26-clang" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_linux_android=$NDK_BIN/aarch64-linux-android26-clang++" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$NDK_BIN/llvm-ar" >> "$GITHUB_ENV"
           rustup target add aarch64-linux-android
           git -C online-ksu apply --check ../online-upstream/targets/zzhl/kernelsu-next/patches/KernelSU-Next-v3.4.0-samsung-kdp-rkp-defex.patch
           git -C online-ksu apply ../online-upstream/targets/zzhl/kernelsu-next/patches/KernelSU-Next-v3.4.0-samsung-kdp-rkp-defex.patch
