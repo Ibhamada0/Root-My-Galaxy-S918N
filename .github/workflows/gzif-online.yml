@@ -76,6 +76,16 @@ jobs:
         with:
           name: gzif-build-inputs
           path: online-out
+      - name: Select analysis or full build
+        id: mode
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          fingerprint = json.loads(Path("online-out/inputs.json").read_text())["fingerprint"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("full=" + str(bool(fingerprint)).lower() + "\n")
+          PY
       - name: Checkout reviewed BOPE source
         uses: actions/checkout@v4
         with:
@@ -84,6 +94,7 @@ jobs:
           path: online-upstream
           persist-credentials: false
       - name: Checkout KernelSU Next v3.4.0 source
+        if: steps.mode.outputs.full == 'true'
         uses: actions/checkout@v4
         with:
           repository: KernelSU-Next/KernelSU-Next
@@ -98,10 +109,12 @@ jobs:
           path: online-kernel-tools
           persist-credentials: false
       - uses: actions/setup-java@v4
+        if: steps.mode.outputs.full == 'true'
         with:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
+        if: steps.mode.outputs.full == 'true'
       - name: Install host and kernel analysis dependencies
         run: |
           sudo apt-get update
@@ -110,8 +123,9 @@ jobs:
           .online-venv/bin/pip install ./online-kernel-tools pyelftools
           echo "$GITHUB_WORKSPACE/.online-venv/bin" >> "$GITHUB_PATH"
       - name: Prepare Android and Rust toolchains
+        if: steps.mode.outputs.full == 'true'
         run: |
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" "cmake;3.22.1" "platforms;android-37"
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" "cmake;3.22.1"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
           echo "KSU_SOURCE=$GITHUB_WORKSPACE/online-ksu" >> "$GITHUB_ENV"
           rustup target add aarch64-linux-android
@@ -141,7 +155,7 @@ jobs:
             echo '## GZIF port report' >> "$GITHUB_STEP_SUMMARY"
             echo 'Static build results do not establish successful rooting. Device validation is pending.' >> "$GITHUB_STEP_SUMMARY"
             echo '~~~json' >> "$GITHUB_STEP_SUMMARY"
-            cat online-out/gzif-report.json >> "$GITHUB_STEP_SUMMARY"
+            cat online-out/gzif-report.json | tee -a "$GITHUB_STEP_SUMMARY"
             echo '~~~' >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Upload build results and failure evidence
