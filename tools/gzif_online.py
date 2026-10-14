@@ -99,7 +99,8 @@ def run_port(project: Path, inputs: dict, report_dir: Path) -> None:
     from bope.kernel import prepare_kernel
     from bope.contract import derive_contract, parse_numeric_macros, verify_contract
     from bope.target import create_target_skeleton, build_target, app_profile, integrate_app
-    from bope.kernelsu import prepare_kernelsu
+    from bope.kernelsu import (prepare_kernelsu, retarget_vermagic, audit_module,
+                               _find_donor_module, _find_donor_btf)
     from bope.factory_cli import _enforce_exact_runtime_identity, _string_macro
 
     donor = project / "targets/zzi8-WIP"
@@ -172,8 +173,26 @@ def run_port(project: Path, inputs: dict, report_dir: Path) -> None:
     evidence_path.write_text(json.dumps(evidence, indent=2) + "\n")
     if not verification["passed"]:
         raise RuntimeError("Generated GZIF contract failed independent verification")
+    donor_module = _find_donor_module(donor)
+    audit_module_path = target / "kernelsu-next/audit/android13-5.15_kernelsu.ko"
+    retarget_vermagic(donor_module, audit_module_path,
+                     _string_macro(donor_header, "TARGET_KERNEL_RELEASE"),
+                     kernel.identity.release)
+    module_audit = audit_module(
+        audit_module_path, target_release=kernel.identity.release,
+        kallsyms=kernel.kallsyms, vmlinux=kernel.elf,
+        build_module=donor_module, donor_btf=_find_donor_btf(donor),
+        target_btf=kernel.btf, llvm_nm=tool("llvm-nm"), pahole=tool("pahole"),
+        modinfo=tool("modinfo"), modprobe=tool("modprobe"), require_layout_check=True,
+    )
+    evidence["kernelsu_static_audit"] = module_audit
+    evidence["status"] = "STATIC_AUDIT_PASSED" if module_audit["passed"] else "KERNELSU_INCOMPATIBLE"
+    evidence_path.write_text(json.dumps(evidence, indent=2) + "\n")
+    (target / "port-manifest.json").write_text(json.dumps(evidence, indent=2) + "\n")
+    if not module_audit["passed"]:
+        raise RuntimeError("KernelSU static compatibility audit failed; see gzif-report.json")
     if not fingerprint:
-        evidence["status"] = "CONTRACT_VERIFIED_RUNTIME_FINGERPRINT_REQUIRED"
+        evidence["status"] = "STATIC_AUDIT_PASSED_RUNTIME_FINGERPRINT_REQUIRED"
         evidence_path.write_text(json.dumps(evidence, indent=2) + "\n")
         (target / "port-manifest.json").write_text(json.dumps(evidence, indent=2) + "\n")
         print("GZIF contract verified. Exact device fingerprint is required before compilation.")
