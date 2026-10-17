@@ -42,6 +42,14 @@ jobs:
         run: |
           yes | "$ANDROID_SDK_ROOT"/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
 
+      - name: Preinstall Android platform 37 (compileSdk)
+        run: |
+          SM="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SM" --licenses >/dev/null 2>&1 || true
+          "$SM" --channel=3 "platforms;android-37.0" || "$SM" "platforms;android-36"
+          ln -sfn android-37.0 "$ANDROID_SDK_ROOT/platforms/android-37" 2>/dev/null || true
+          ls "$ANDROID_SDK_ROOT/platforms"
+
       - name: Preinstall NDK / CMake (best-effort)
         run: |
           "$ANDROID_SDK_ROOT"/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "cmake;3.22.1" >/dev/null 2>&1 || echo "sdkmanager install skipped; relying on AGP auto-download"

@@ -36,6 +36,42 @@
         "url": "asset://ksud-next",
         "size": 3852248
       }
+    },
+    {
+      "payloadId": "dm3q-S918NKSU8GZIF",
+      "displayName": "Galaxy S23 Ultra SM-S918N | GZIF \u2022 Android 17 \u2022 5.15.197",
+      "models": [
+        "SM-S918N"
+      ],
+      "kernelVersions": [
+        "5.15.197"
+      ],
+      "exploit": {
+        "url": "asset://cve-2026-43499-app-gzif.so",
+        "size": 131072
+      },
+      "kernelsu": {
+        "url": "asset://ksud-f731u-kdp",
+        "size": 6756208
+      }
+    },
+    {
+      "payloadId": "dm3q-S918NKSU8GZIF-ksunext",
+      "displayName": "Galaxy S23 Ultra SM-S918N | GZIF | KernelSU Next",
+      "models": [
+        "SM-S918N"
+      ],
+      "kernelVersions": [
+        "5.15.197"
+      ],
+      "exploit": {
+        "url": "asset://cve-2026-43499-app-gzif.so",
+        "size": 131072
+      },
+      "kernelsu": {
+        "url": "asset://ksud-next",
+        "size": 3852248
+      }
     }
   ]
 }

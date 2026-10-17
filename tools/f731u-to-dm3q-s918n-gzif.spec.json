@@ -1,0 +1,129 @@
+{
+  "name": "F731U/S918N FZG1 -> dm3q-S918NKSU8GZIF",
+  "comment": "Variant A. 15 closed-engine data-symbol cells; new_value = measured from S918NKSU8GZIF kallsyms. old_value = the bytes actually present in the bundled S918N payload. This mirrors the developer's own f731u->afzf5 spec rule (movz=lo16, movn=~lo16 of the same symbol).",
+  "base_payload_md5": "22c39e76f57e99b25e811d5a3226ffb1",
+  "symbol_fixes": [
+    {
+      "offset": "0x0067ec",
+      "type": "mov_imm16",
+      "old_value": "0xd338",
+      "new_value": "0x0678",
+      "symbol": "ASHMEM_FOPS_OFF",
+      "form": "movz(lo16)"
+    },
+    {
+      "offset": "0x0068b8",
+      "type": "mov_imm16",
+      "old_value": "0x27c7",
+      "new_value": "0xf987",
+      "symbol": "ASHMEM_FOPS_OFF",
+      "form": "movn(~lo16)"
+    },
+    {
+      "offset": "0x006964",
+      "type": "mov_imm16",
+      "old_value": "0x27c7",
+      "new_value": "0xf987",
+      "symbol": "ASHMEM_FOPS_OFF",
+      "form": "movn(~lo16)"
+    },
+    {
+      "offset": "0x006b7c",
+      "type": "mov_imm16",
+      "old_value": "0x27c7",
+      "new_value": "0xf987",
+      "symbol": "ASHMEM_FOPS_OFF",
+      "form": "movn(~lo16)"
+    },
+    {
+      "offset": "0x006bdc",
+      "type": "mov_imm16",
+      "old_value": "0x27c7",
+      "new_value": "0xf987",
+      "symbol": "ASHMEM_FOPS_OFF",
+      "form": "movn(~lo16)"
+    },
+    {
+      "offset": "0x007470",
+      "type": "mov_imm16",
+      "old_value": "0xf2e0",
+      "new_value": "0x22a0",
+      "symbol": "ANON_PIPE_BUF_OPS_OFF",
+      "form": "movz(lo16)"
+    },
+    {
+      "offset": "0x007478",
+      "type": "mov_imm16",
+      "old_value": "0x081f",
+      "new_value": "0xdd5f",
+      "symbol": "ANON_PIPE_BUF_OPS_OFF",
+      "form": "movn(~lo16)"
+    },
+    {
+      "offset": "0x00754c",
+      "type": "mov_imm16",
+      "old_value": "0xf2e0",
+      "new_value": "0x22a0",
+      "symbol": "ANON_PIPE_BUF_OPS_OFF",
+      "form": "movz(lo16)"
+    },
+    {
+      "offset": "0x007554",
+      "type": "mov_imm16",
+      "old_value": "0x081f",
+      "new_value": "0xdd5f",
+      "symbol": "ANON_PIPE_BUF_OPS_OFF",
+      "form": "movn(~lo16)"
+    },
+    {
+      "offset": "0x00765c",
+      "type": "mov_imm16",
+      "old_value": "0xf2e0",
+      "new_value": "0x22a0",
+      "symbol": "ANON_PIPE_BUF_OPS_OFF",
+      "form": "movz(lo16)"
+    },
+    {
+      "offset": "0x00766c",
+      "type": "mov_imm16",
+      "old_value": "0x081f",
+      "new_value": "0xdd5f",
+      "symbol": "ANON_PIPE_BUF_OPS_OFF",
+      "form": "movn(~lo16)"
+    },
+    {
+      "offset": "0x00789c",
+      "type": "mov_imm16",
+      "old_value": "0xb807",
+      "new_value": "0x888f",
+      "symbol": "KMALLOC_CACHES_OFF",
+      "form": "movn(~lo16)"
+    },
+    {
+      "offset": "0x0078ac",
+      "type": "mov_imm16",
+      "old_value": "0x42f8",
+      "new_value": "0x7770",
+      "symbol": "KMALLOC_CACHES_OFF",
+      "form": "movz(lo16)"
+    },
+    {
+      "offset": "0x007af4",
+      "type": "mov_imm16",
+      "old_value": "0xf2e0",
+      "new_value": "0x22a0",
+      "symbol": "ANON_PIPE_BUF_OPS_OFF",
+      "form": "movz(lo16)"
+    },
+    {
+      "offset": "0x007afc",
+      "type": "mov_imm16",
+      "old_value": "0x081f",
+      "new_value": "0xdd5f",
+      "symbol": "ANON_PIPE_BUF_OPS_OFF",
+      "form": "movn(~lo16)"
+    }
+  ],
+  "branch_nops": [],
+  "forced_flags": []
+}

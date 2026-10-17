@@ -1,0 +1,97 @@
+{
+  "addresses": {
+    "ANON_PIPE_BUF_OPS_OFF": "0xffffffc009e822a0",
+    "ASHMEM_FOPS_OFF": "0xffffffc00a010678",
+    "ASHMEM_IOCTL_OFF": "0xffffffc0091513a0",
+    "ASHMEM_MMAP_OFF": "0xffffffc009151a54",
+    "ASHMEM_OPEN_OFF": "0xffffffc009151d34",
+    "ASHMEM_RELEASE_OFF": "0xffffffc009151dcc",
+    "ASHMEM_SHOW_FDINFO_OFF": "0xffffffc009151ee8",
+    "CALL_USERMODEHELPER_EXEC_WORK_OFF": "0xffffffc008104888",
+    "COMMIT_CREDS_OFF": "0xffffffc0081203d0",
+    "CONFIGFS_BIN_WRITE_ITER_OFF": "0xffffffc0085d9444",
+    "CONFIGFS_READ_ITER_OFF": "0xffffffc0085d8a1c",
+    "INIT_TASK_OFF": "0xffffffc00ac05400",
+    "KMALLOC_CACHES_OFF": "0xffffffc00a067770",
+    "NOOP_LLSEEK_OFF": "0xffffffc0084bc6b4",
+    "OVERRIDE_CREDS_OFF": "0xffffffc00811f4a8",
+    "PREPARE_KERNEL_CRED_OFF": "0xffffffc00811e694",
+    "ROOT_TASK_GROUP_OFF": "0xffffffc00acb9ac0",
+    "SELINUX_ENFORCING_OFF": "0xffffffc00ad8e640",
+    "SLIDE_NFULNL_LOGGER_OBJECT_OFF": "0xffffffc00aa91e50",
+    "SLIDE_SYSCTL_BOOTID_OFF": "0xffffffc00ae6c131",
+    "SYSTEM_UNBOUND_WQ_OFF": "0xffffffc00aa90808"
+  },
+  "android": "17 / One UI 9.0",
+  "btf_offset": "0x21f39dc",
+  "btf_size": 6098807,
+  "build": "S918NKSU8GZIF",
+  "device": "dm3q",
+  "fingerprint": "samsung/dm3qksx/dm3q:17/CP2A.260605.016/S918NKSU8GZIF:user/release-keys",
+  "firmware_display": "CP2A.260605.016.S918NKSU8GZIF",
+  "kernel_release": "5.15.197-android13-8-34343818-abS918NKSU8GZIF",
+  "kernel_version": "#1 SMP PREEMPT Mon Sep 28 01:56:16 UTC 2026",
+  "kimage_text_base": "0xffffffc008000000",
+  "layouts": {},
+  "model": "SM-S918N",
+  "native_artifacts": {
+    "ksud-f731u-kdp": {
+      "md5": "bd9080bc728f3b98f0239236cd2e22ec",
+      "size": 6756208
+    },
+    "libcve43499root.so": {
+      "md5": "2451b6aa907b611740c12d8b2e0630ed",
+      "size": 23632
+    },
+    "libcve43499root_next.so": {
+      "md5": "ad8570ed405a7aff92bb340b924b6c3a",
+      "size": 25472
+    }
+  },
+  "offsets": {
+    "ANON_PIPE_BUF_OPS_OFF": "0x1e822a0",
+    "ASHMEM_FOPS_OFF": "0x2010678",
+    "ASHMEM_IOCTL_OFF": "0x11513a0",
+    "ASHMEM_MMAP_OFF": "0x1151a54",
+    "ASHMEM_OPEN_OFF": "0x1151d34",
+    "ASHMEM_RELEASE_OFF": "0x1151dcc",
+    "ASHMEM_SHOW_FDINFO_OFF": "0x1151ee8",
+    "CALL_USERMODEHELPER_EXEC_WORK_OFF": "0x104888",
+    "COMMIT_CREDS_OFF": "0x1203d0",
+    "CONFIGFS_BIN_WRITE_ITER_OFF": "0x5d9444",
+    "CONFIGFS_READ_ITER_OFF": "0x5d8a1c",
+    "INIT_TASK_OFF": "0x2c05400",
+    "KMALLOC_CACHES_OFF": "0x2067770",
+    "NOOP_LLSEEK_OFF": "0x4bc6b4",
+    "OVERRIDE_CREDS_OFF": "0x11f4a8",
+    "PREPARE_KERNEL_CRED_OFF": "0x11e694",
+    "ROOT_TASK_GROUP_OFF": "0x2cb9ac0",
+    "SELINUX_ENFORCING_OFF": "0x2d8e640",
+    "SLIDE_NFULNL_LOGGER_OBJECT_OFF": "0x2a91e50",
+    "SLIDE_SYSCTL_BOOTID_OFF": "0x2e6c131",
+    "SYSTEM_UNBOUND_WQ_OFF": "0x2a90808"
+  },
+  "payload_gzif": {
+    "base_md5": "22c39e76f57e99b25e811d5a3226ffb1",
+    "base_size": 131072,
+    "bytes_changed": 30,
+    "md5": "a931f229e166ed04c2530750bfe885b2",
+    "sites": 15,
+    "size": 131072
+  },
+  "provenance": {
+    "donor": "soumarcelino/Root-My-Galaxy-SM-S918B targets/zzhl (S918BXXUAZZHL, identical kernel build 34343818)",
+    "layouts": "BTF parsed from the target kernel image",
+    "source": "boot.img.lz4 supplied by repository owner (S918NKSU8GZIF)",
+    "symbols": "kallsyms reconstructed with vmlinux-to-elf from the target kernel Image (126451 symbols)",
+    "unconfirmed": [
+      "P0_KERNEL_PHYS_LOAD 0xa8000000 (ZZHL donor) vs 0x80080000 (FZG1)",
+      "stability-launcher timings",
+      "SLIDE_TRACEFS_WORKER_CALLER_OFF 0x0010dd84 (donor)",
+      "SLIDE_NFULNL_LOGGER_NAME_OFF 0x01d60919 (donor)",
+      "SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR_OFF 0x02bbab48 (donor)",
+      "ASHMEM_MISC_FOPS_OFF 0x02bfd1f8 / ASHMEM_COMPAT_IOCTL_OFF 0x011519a0 / COPY_SPLICE_READ_OFF 0x00528dcc (donor; not exported by kallsyms)"
+    ]
+  },
+  "schema": "rmg-derived-target/1"
+}
